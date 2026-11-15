@@ -32,7 +32,10 @@ const App = {
   async login(form) {
     const b = $('button[type=submit]', form), err = $('.err', form); err.hidden = true;
     await run(b, async () => {
-      const j = await api('login', { username: form.username.value, password: form.password.value });
+      const ar = t => t.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x660).replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x6F0);
+      let un = ar(form.username.value).trim().toLowerCase().replace(/\s+/g, ''); if (/^t[o0-9]{1,3}$/.test(un)) un = un.replace(/o/g, '0');
+      let pw = form.password.value; if (/^[\u0660-\u0669\u06F0-\u06F9\s]+$/.test(pw)) pw = ar(pw).replace(/\s/g, '');
+      const j = await api('login', { username: un, password: pw });
       if (j.error) { err.textContent = j.error; err.hidden = false; form.password.value = ''; form.password.focus(); return; }
       token = j.token; store.set('biora_token', token); location.hash = '#home'; App.route = 'home'; App.lastRoute = null; App.render();
     });
