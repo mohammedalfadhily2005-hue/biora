@@ -36,7 +36,7 @@ const App = {
       let un = ar(form.username.value).trim().toLowerCase().replace(/\s+/g, ''); if (/^t[o0-9]{1,3}$/.test(un)) un = un.replace(/o/g, '0');
       let pw = form.password.value; if (/^[\u0660-\u0669\u06F0-\u06F9\s]+$/.test(pw)) pw = ar(pw).replace(/\s/g, '');
       const j = await api('login', { username: un, password: pw });
-      if (j.error) { err.textContent = j.error; err.hidden = false; form.password.value = ''; form.password.focus(); return; }
+      if (j.error) { err.textContent = j.error; err.hidden = false; form.password.value = ''; form.password.focus(); form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); return; }
       token = j.token; store.set('biora_token', token); location.hash = '#home'; App.route = 'home'; App.lastRoute = null; App.render();
     });
   },
@@ -101,17 +101,19 @@ const App = {
   short: t => ({ 'لوحة التحكم': 'الرئيسية', 'الكتب والتعاميم': 'الكتب', 'الوارد من القسم': 'الوارد', 'المحوَّل إلينا': 'الطلبات' }[t] || t),
   badges() { /* light refresh while a modal is open */ },
 
+  pwField: (id, name, label, auto, extra = '') => `<div class="field"><label for="${id}">${label}</label><div class="inp-wrap pw">${ic('lock')}<input class="input" id="${id}" name="${name}" type="password" autocomplete="${auto}" dir="ltr" required ${extra}><button type="button" class="eye" data-act="togglePw" aria-label="إظهار كلمة المرور">${ic('eye')}</button><i class="bar"></i></div></div>`,
+  togglePw(el) { const i = el.parentElement.querySelector('input'), show = i.type === 'password'; i.type = show ? 'text' : 'password'; el.innerHTML = ic(show ? 'eyeoff' : 'eye'); el.setAttribute('aria-label', show ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'); el.classList.toggle('on', show); i.focus(); },
   vLogin() {
-    return `<div class="login"><section class="login-brand">${HELIX_BG}${BRAND}
+    return `<div class="login"><section class="login-brand">${HELIX_BG}<i class="cell c1"></i><i class="cell c2"></i><i class="cell c3"></i><i class="cell c4"></i><i class="cell c5"></i>${BRAND}
       <div><h1>معاملات قسم علوم الحياة،<br><em>من الورق إلى ضغطة واحدة.</em></h1>
       <p class="lead">قدّم طلبك، تابع مساره من رئاسة القسم إلى العمادة، واستلم النتيجة — كل ذلك من مكان واحد.</p></div>
       <div class="foot">جامعة ذي قار — كلية العلوم — قسم علوم الحياة · العام الدراسي <span class="num">2026-2027</span></div></section>
       <section class="login-form"><form class="login-card" data-submit="login" autocomplete="on">${BRAND}
         <h2>تسجيل الدخول</h2><p class="muted">أدخل اسم المستخدم وكلمة المرور المسلَّمة لك من رئاسة القسم.</p>
         <div class="err" hidden></div>
-        <div class="field"><label for="lu">اسم المستخدم</label><input class="input" id="lu" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr" required autofocus></div>
-        <div class="field"><label for="lp">كلمة المرور</label><input class="input" id="lp" name="password" type="password" autocomplete="current-password" dir="ltr" required></div>
-        <button class="btn block" type="submit">دخول</button>
+        <div class="field"><label for="lu">اسم المستخدم</label><div class="inp-wrap">${ic('user')}<input class="input" id="lu" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr" placeholder="t01" required autofocus><i class="bar"></i></div></div>
+        ${App.pwField('lp', 'password', 'كلمة المرور', 'current-password')}
+        <button class="btn block lg" type="submit">${ic('lock')}دخول</button>
         <p class="muted small" style="margin-top:16px;margin-bottom:0">نسيت كلمة المرور؟ راجع رئاسة القسم لإعادة تعيينها.</p></form></section></div>`;
   },
 
@@ -130,7 +132,7 @@ const App = {
   /* ───── home ───── */
   v_home() {
     const m = me(), R = ST.requests, mine = R.filter(r => r.user_id === m.id), td = today();
-    const hello = `<div class="hero">${HELIX_BG}<div class="grow"><h2>أهلاً، ${h(m.name)}</h2><p>${fmtDate(td, true)} · ${h(ST.settings.department)}، ${h(ST.settings.college)}</p></div>${
+    const hello = `<div class="hero">${HELIX_BG}<i class="cell c1"></i><i class="cell c2"></i><i class="cell c3"></i><div class="grow"><h2>أهلاً، ${h(m.name)}</h2><p>${fmtDate(td, true)} · ${h(ST.settings.department)}، ${h(ST.settings.college)}</p></div>${
       (isFac() || isHead()) ? `<button class="btn gold" data-act="pickType">${ic('plus')}طلب جديد</button>` : ''}</div>`;
     if (isFac()) {
       const open = mine.filter(isOpen);
@@ -230,18 +232,37 @@ const App = {
         ${last ? `<div class="err"><b>سبب الإرجاع:</b> ${h(last.note || '')}</div>` : ''}
         <div class="grid2">${t.f.map((f, i) => App.fieldHTML(f, d[f.k], 'f' + i)).join('')}
           <div class="full small muted" id="days-hint" style="margin:-6px 0 10px"></div>
-          <div class="field full"><label>المرفقات (اختياري — صور أو PDF، حتى 2 ميغابايت للملف)</label>
-            <div class="files" id="file-list"></div><div><label class="btn ghost sm" style="margin-top:8px">${ic('clip')}إرفاق ملف<input type="file" hidden multiple accept="image/*,.pdf,.doc,.docx" data-act-change="addFiles"></label></div></div>
+          ${App.attachBar()}
         </div><div class="err" hidden id="form-err"></div></div>
         <div class="modal-f"><button class="btn" type="submit">${ic('send')}${r ? 'إعادة تقديم الطلب' : 'تقديم الطلب'}</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
     const o = $('#modals').lastElementChild; App.updateDays($('form', o));
-    $('input[type=file]', o).addEventListener('change', async e => {
-      try { const fs = await readFiles(e.target); App._files.push(...fs); if (App._files.length > 4) { App._files.length = 4; toast('الحد الأقصى 4 مرفقات', true); } App.drawFiles(); }
-      catch (er) { toast(er.message, true); } e.target.value = '';
-    });
   },
-  drawFiles() { const b = $('#file-list'); if (b) b.innerHTML = App._files.map((f, i) => `<span class="file">${ic('clip')}<span>${h(f.name)}</span><button type="button" class="rm" data-act="rmFile" data-i="${i}" aria-label="حذف">${ic('x')}</button></span>`).join(''); },
-  rmFile(el) { App._files.splice(+el.dataset.i, 1); App.drawFiles(); },
+  attachBar: (label = 'المرفقات (اختياري — حتى 8 ملفات، 20 ميغابايت للملف)') => `<div class="field full"><label>${label}</label><div class="attach" id="drop">
+      <div class="attach-btns">${[['image', 'صورة', 'image/*', ''], ['camera', 'كاميرا', 'image/*', 'environment'], ['file', 'ملف', '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv', ''], ['archive', 'مضغوط', '.zip,.rar,.7z', ''], ['mic', 'صوت', 'audio/*', ''], ['video', 'فيديو', 'video/*', '']]
+        .map(([i, l, acc, cap]) => `<label class="att-btn" tabindex="0">${ic(i)}<span>${l}</span><input type="file" hidden ${cap ? `capture="${cap}"` : 'multiple'} accept="${acc}" data-attach></label>`).join('')}
+        <button type="button" class="att-btn" data-act="addLink">${ic('link')}<span>رابط</span></button></div>
+      <div class="att-list" id="file-list"></div><div class="att-hint small muted">أو اسحب الملفات وأفلتها هنا</div></div></div>`,
+  addLink() {
+    Modal.open(Modal.head('إضافة رابط', 'موقع، أو رابط ملف على Google Drive وغيره') + `<form data-submit="saveLink" style="display:contents"><div class="modal-b">
+      <div class="field"><label for="lk">الرابط <span class="req">*</span></label><input class="input" id="lk" name="url" type="text" inputmode="url" autocapitalize="none" spellcheck="false" dir="ltr" placeholder="https://" required autofocus maxlength="1000"></div>
+      <div class="field"><label for="lkt">عنوان الرابط (اختياري)</label><input class="input" id="lkt" name="title" maxlength="100"></div></div>
+      <div class="modal-f"><button class="btn" type="submit">إضافة</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`, { narrow: 1 });
+  },
+  saveLink(form) {
+    let u = form.url.value.trim(); if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    let host = ''; try { host = new URL(u).hostname; } catch { return toast('الرابط غير صحيح', true); }
+    if (App._files.length >= MAX_FILES) return toast(`الحد الأقصى ${MAX_FILES} مرفقات`, true);
+    App._files.push({ name: form.title.value.trim() || host, mime: 'text/uri-list', size: 0, link: u });
+    Modal.close(form.closest('.overlay')); App.drawFiles();
+  },
+  drawFiles() {
+    const b = $('#file-list'); if (!b) return;
+    b.innerHTML = App._files.map((f, i) => `<div class="att-item">${f.url ? `<img src="${f.url}" alt="">` : `<span class="att-ic">${ic(KIND_ICON[fileKind(f.mime, f.name)])}</span>`}
+      <span class="att-meta"><b>${h(f.name)}</b><span class="num">${f.link ? h(f.link.replace(/^https?:\/\//, '').slice(0, 40)) : fmtSize(f.size)}</span></span>
+      <button type="button" class="rm" data-act="rmFile" data-i="${i}" aria-label="حذف المرفق">${ic('x')}</button></div>`).join('');
+    const d = $('#drop'); if (d) d.classList.toggle('has', App._files.length > 0);
+  },
+  rmFile(el) { const f = App._files.splice(+el.dataset.i, 1)[0]; if (f && f.url) URL.revokeObjectURL(f.url); App.drawFiles(); },
   updateDays(form) {
     const hint = $('#days-hint', form); if (!hint || !form.from || !form.to || form.to.type !== 'date') return;
     const a = form.from.value, b = form.to.value;
@@ -257,7 +278,7 @@ const App = {
     if (data.from && data.to && /^\d{4}-\d\d-\d\d$/.test(data.to) && data.to < data.from) { err.textContent = 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية'; err.hidden = false; return; }
     const id = form.dataset.id;
     run($('button[type=submit]', form), async () => {
-      await api(id ? 'resubmit' : 'submit_request', { id, type: t.k, data, files: App._files });
+      await api(id ? 'resubmit' : 'submit_request', { id, type: t.k, data, files: await uploadFiles(App._files) });
       Modal.closeAll(); App.render(true);
       toast(id ? 'أُعيد تقديم الطلب' : (isHead() ? 'أُرسل الطلب إلى العمادة' : 'قُدِّم الطلب إلى رئاسة القسم'));
       const r = ST.requests[0]; if (!id && r) App.openReq({ dataset: { id: r.id } });
@@ -288,7 +309,7 @@ const App = {
     Modal.open(Modal.head(h(typeLabel(r)), `رقم الطلب <span class="num">${h(r.ref)}</span> · ${fmtDT(r.created_at)}`) + `<div class="modal-b">
       <div class="who"><span class="avatar lg">${h(initials(o.name))}</span><div style="flex:1;min-width:0"><b>${h(o.name || '—')}</b><span>${h(o.position || RANK_LABEL[o.rank] || '')}</span></div>${statusChip(r)}</div>
       <dl class="dl">${rows}${days}</dl>
-      ${r.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${r.files.map(f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic('clip')}<span>${h(f.name)}</span></button>`).join('')}</div>` : ''}
+      ${r.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${r.files.map(fileChip).join('')}</div>` : ''}
       <div class="sub-h">مسار الطلب</div><div class="strand">${evs}</div></div>
       <div class="modal-f">${acts}<span class="sp"></span>${B('note', 'ملاحظة', 'ghost', 'note')}<button class="btn ghost" data-act="printReq" data-id="${r.id}">${ic('printer')}طباعة</button></div>`);
   },
@@ -481,7 +502,7 @@ const App = {
       return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic(l.kind === 'circular' ? 'users' : 'mail')}</span><span class="mid"><b>${h(l.subject)}</b><span>${u.letTab === 'in' ? 'من: ' + h(upos(l.from_id)) : 'إلى: ' + h(l.to_label || '')}</span></span>
         <span class="end">${l.kind === 'circular' ? '<span class="chip green plain">تعميم</span>' : App.decChip(l)}<span class="date"><span class="num">${h(l.ref)}</span> · ${ago(l.created_at)}</span></span></button>`; };
     return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px">${isFac() ? '' : `<div class="seg"><button class="${u.letTab === 'in' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="in">الوارد<span class="n num">${unread || inbox.length}</span></button><button class="${u.letTab === 'out' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="out">الصادر<span class="n num">${out.length}</span></button></div>`}
-      <span style="flex:1"></span>${isFac() ? '' : `<button class="btn" data-act="compose">${ic('plus')}كتاب جديد</button>`}</div>
+      <span style="flex:1"></span>${isFac() ? '' : `<button class="btn ghost" data-act="compose" data-scan="1">${ic('camera')}رفع كتاب جاهز</button><button class="btn" data-act="compose">${ic('plus')}كتاب جديد</button>`}</div>
       <div class="card list">${L.map(row).join('') || App.empty(u.letTab === 'in' ? 'لا توجد كتب واردة' : 'لم ترسل كتباً بعد', isFac() ? 'ستظهر هنا تعاميم رئاسة القسم.' : '', 'mail')}</div>`;
   },
   DEC: { accept: ['موافقة', 'موافَق عليه', 'green'], reject: ['رفض', 'مرفوض', 'red'], return: ['إعادة', 'مُعاد إلى القسم', 'amber'] },
@@ -522,7 +543,7 @@ const App = {
       <div class="full"><dt>نص الكتاب</dt><dd>${h(l.body) || '—'}</dd></div></dl>
       ${(() => { const d = App.decision(l); if (d) return `<div class="decision ${App.DEC[d.k][2]}"><b>قرار العمادة: ${App.DEC[d.k][1]}</b><span>${h(upos(d.letter.from_id))} · ${fmtDT(d.letter.created_at)}</span>${d.letter.body ? `<p>${h(d.letter.body)}</p>` : ''}</div>`; return App.needsDecision(l) ? '<div class="decision amber"><b>بانتظار قرار العمادة</b><span>لم يُبتّ بهذا الكتاب بعد.</span></div>' : ''; })()}
       ${par ? `<p class="small muted" style="margin-top:10px">رداً على / إحالةً لـ: ${h(par.subject)} (<span class="num">${h(par.ref)}</span>)</p>` : ''}
-      ${l.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${l.files.map(f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic('clip')}<span>${h(f.name)}</span></button>`).join('')}</div>` : ''}
+      ${l.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${l.files.map(fileChip).join('')}</div>` : ''}
       ${mineL ? `<div class="sub-h">الاطلاع (<span class="num">${read}</span> من <span class="num">${l.rcpt.length}</span>)</div><div class="card list" style="max-height:220px;overflow:auto">${l.rcpt.map(c => `<div class="row" style="padding:9px 14px"><span class="mid"><b>${h(upos(c.user_id))}</b></span><span class="chip ${c.read_at ? 'green' : 'gray'}">${c.read_at ? 'اطّلع' : 'لم يطّلع'}</span></div>`).join('')}</div>` : ''}</div>
       <div class="modal-f">${isDean() && !mineL && App.needsDecision(l) && !App.decision(l) ? `<button class="btn" data-act="decide" data-d="accept" data-id="${l.id}">${ic('check')}موافقة</button><button class="btn ghost" data-act="decide" data-d="return" data-id="${l.id}">${ic('undo')}إعادة للقسم</button><button class="btn danger" data-act="decide" data-d="reject" data-id="${l.id}">${ic('x')}رفض</button>` : ''}
         ${!mineL && !isFac() ? `<button class="btn ${isDean() && App.needsDecision(l) && !App.decision(l) ? 'ghost' : ''}" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
@@ -532,28 +553,29 @@ const App = {
     if (!mineL && l.rcpt.some(c => c.user_id === m.id && !c.read_at)) api('read_letter', { id: l.id }).then(() => { App.dirty = true; }).catch(() => {});
   },
   compose(el) {
-    const m = me(), rep = el.dataset.reply && ST.letters.find(x => x.id === el.dataset.reply), fwd = el.dataset.fwd && ST.letters.find(x => x.id === el.dataset.fwd);
+    const m = me(), rep = el.dataset.reply && ST.letters.find(x => x.id === el.dataset.reply), fwd = el.dataset.fwd && ST.letters.find(x => x.id === el.dataset.fwd), scan = !!el.dataset.scan;
     const opts = isHead() ? [['deanery', 'عمادة الكلية'], ['staff', 'تعميم على كل الكادر التدريسي'], ['ids', 'تدريسيون أو جهات محددة…']]
       : isDean() ? [['head', 'رئاسة قسم علوم الحياة'], ['units', 'كل شعب العمادة'], ['ids', 'جهات محددة…']] : [['deanery', 'عمادة الكلية']];
     const pre = fwd ? el.dataset.to : rep ? 'ids' : opts[0][0];
     const cand = ST.users.filter(x => x.active && x.id !== m.id && (isHead() || (isDean() && x.role !== 'faculty') || (isUnit() && ['dean', 'dean_asst'].includes(x.role))));
     App._files = []; Modal.closeAll();
-    Modal.open(Modal.head(rep ? 'رد على كتاب' : fwd ? 'إحالة كتاب' : 'كتاب جديد', (rep || fwd) ? h((rep || fwd).subject) : '') + `<form data-submit="sendLetter" data-parent="${(rep || fwd || {}).id || ''}" style="display:contents"><div class="modal-b">
+    Modal.open(Modal.head(rep ? 'رد على كتاب' : fwd ? 'إحالة كتاب' : scan ? 'رفع كتاب جاهز' : 'كتاب جديد', (rep || fwd) ? h((rep || fwd).subject) : scan ? 'صوّر الكتاب الموقَّع أو ارفع ملفه، واكتب موضوعه فقط' : '') + `<form data-submit="sendLetter" data-parent="${(rep || fwd || {}).id || ''}" style="display:contents"><div class="modal-b">
       <div class="field"><label for="lt">إلى <span class="req">*</span></label><select class="input" id="lt" name="to" data-toggle-pick>${opts.map(([k, l]) => `<option value="${k}"${pre === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field" id="pick-box"${pre === 'ids' ? '' : ' hidden'}><label>اختر المستلمين</label><div class="pick">${cand.map(x => `<label class="check"><input type="checkbox" name="ids" value="${x.id}"${rep && rep.from_id === x.id ? ' checked' : ''}> ${h(x.position ? x.position + (x.role === 'faculty' || x.role === 'head' ? '' : '') : x.name)}${x.position && x.role !== 'unit' ? ' — ' + h(x.name) : ''}</label>`).join('')}</div></div>
       <div class="field"><label for="ls">الموضوع <span class="req">*</span></label><input class="input" id="ls" name="subject" required maxlength="200" value="${h(rep ? 'رد: ' + rep.subject : fwd ? fwd.subject : '')}"></div>
-      <div class="field"><label for="lb">نص الكتاب</label><textarea class="input" id="lb" name="body" style="min-height:150px" maxlength="6000" autofocus>${h(fwd ? `\n\n— نص الكتاب المُحال (${fwd.ref}) —\n${fwd.body}` : '')}</textarea></div>
-      <div class="field"><label>المرفقات (اختياري)</label><div class="files" id="file-list"></div><div><label class="btn ghost sm" style="margin-top:8px">${ic('clip')}إرفاق ملف<input type="file" hidden multiple accept="image/*,.pdf,.doc,.docx"></label></div></div></div>
+      ${scan ? App.attachBar('صورة الكتاب أو ملفه') : ''}
+      <div class="field"><label for="lb">${scan ? 'ملاحظة (اختياري)' : 'نص الكتاب'}</label><textarea class="input" id="lb" name="body" style="min-height:${scan ? 80 : 150}px" maxlength="6000"${scan ? '' : ' autofocus'}>${h(fwd ? `\n\n— نص الكتاب المُحال (${fwd.ref}) —\n${fwd.body}` : '')}</textarea></div>
+      ${scan ? '' : App.attachBar()}</div>
       <div class="modal-f"><button class="btn" type="submit">${ic('send')}إرسال</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
     const o = $('#modals').lastElementChild;
     $('[data-toggle-pick]', o).addEventListener('change', e => { $('#pick-box', o).hidden = e.target.value !== 'ids'; });
-    $('input[type=file]', o).addEventListener('change', async e => { try { App._files.push(...await readFiles(e.target)); App._files.length = Math.min(4, App._files.length); App.drawFiles(); } catch (er) { toast(er.message, true); } e.target.value = ''; });
   },
   sendLetter(form) {
     const to = form.to.value, ids = $$('input[name=ids]:checked', form).map(i => i.value);
     if (to === 'ids' && !ids.length) return toast('اختر مستلماً واحداً على الأقل', true);
+    if (form.closest('.modal').querySelector('h3').textContent.startsWith('رفع كتاب جاهز') && !App._files.length) return toast('أرفق صورة الكتاب أو ملفه أولاً', true);
     run($('button[type=submit]', form), async () => {
-      await api('send_letter', { to, ids, subject: form.subject.value, body: form.body.value, parent_id: form.dataset.parent, files: App._files });
+      await api('send_letter', { to, ids, subject: form.subject.value, body: form.body.value, parent_id: form.dataset.parent, files: await uploadFiles(App._files) });
       Modal.closeAll(); App.ui.letTab = 'out'; App.render(true); toast('أُرسل الكتاب');
     });
   },
@@ -589,8 +611,8 @@ const App = {
         <button class="btn soft" type="submit">حفظ بيانات المؤسسة</button></form></div>` : ''}
     </div><div>
       <div class="card pad"><h3 style="font-size:16px;margin-bottom:12px">كلمة المرور</h3><form data-submit="changePass">
-        <div class="field"><label for="p1">الحالية</label><input class="input" id="p1" name="old" type="password" dir="ltr" autocomplete="current-password" required></div>
-        <div class="field"><label for="p2">الجديدة (6 أحرف على الأقل)</label><input class="input" id="p2" name="nw" type="password" dir="ltr" autocomplete="new-password" minlength="6" required></div>
+        ${App.pwField('p1', 'old', 'الحالية', 'current-password')}
+        ${App.pwField('p2', 'nw', 'الجديدة (6 أحرف على الأقل)', 'new-password', 'minlength="6"')}
         <button class="btn soft block" type="submit">${ic('lock')}تغيير كلمة المرور</button></form></div>
       ${standalone ? '' : `<div class="card pad" style="margin-top:16px"><h3 style="font-size:16px;margin-bottom:6px">تنصيب التطبيق</h3><p class="small muted" style="margin-bottom:12px">${App.installEvt ? 'أضف BIORA كأيقونة على جهازك ليفتح مثل أي تطبيق.' : ios ? 'في Safari: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».' : 'من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».'}</p>${App.installEvt ? `<button class="btn gold block" data-act="install">${ic('download')}تنصيب BIORA</button>` : ''}</div>`}
       <button class="btn ghost block" style="margin-top:16px" data-act="help">${ic('note')}دليل الاستخدام</button>
@@ -614,16 +636,22 @@ const App = {
   changePass(form) { run($('button[type=submit]', form), async () => { await api('change_password', { old: form.old.value, new: form.nw.value }); Modal.closeAll(); App.render(true); toast('تم تغيير كلمة المرور'); }); },
   forcePassword() {
     Modal.open(Modal.head('اختر كلمة مرور خاصة بك', 'مطلوب عند أول دخول', true) + `<form data-submit="changePass" style="display:contents"><div class="modal-b"><p class="muted" style="margin-bottom:14px">لحماية حسابك، غيّر كلمة المرور المؤقتة إلى كلمة تعرفها أنت فقط.</p>
-      <div class="field"><label for="fp1">كلمة المرور المؤقتة</label><input class="input" id="fp1" name="old" type="password" dir="ltr" autocomplete="current-password" required autofocus></div>
-      <div class="field"><label for="fp2">كلمة المرور الجديدة (6 أحرف على الأقل)</label><input class="input" id="fp2" name="nw" type="password" dir="ltr" autocomplete="new-password" minlength="6" required></div></div>
+      ${App.pwField('fp1', 'old', 'كلمة المرور المؤقتة', 'current-password', 'autofocus')}
+      ${App.pwField('fp2', 'nw', 'كلمة المرور الجديدة (6 أحرف على الأقل)', 'new-password', 'minlength="6"')}</div>
       <div class="modal-f"><button class="btn" type="submit">حفظ والمتابعة</button><button class="btn ghost" type="button" data-act="logout">خروج</button></div></form>`, { narrow: 1, locked: 1 });
   },
   async install() { if (!App.installEvt) return; App.installEvt.prompt(); try { await App.installEvt.userChoice; } catch {} App.installEvt = null; App.render(true); }
 };
 
 document.addEventListener('change', e => {
+  if (e.target.matches('[data-attach]')) { addFiles(e.target.files).catch(er => toast(er.message, true)).finally(() => { e.target.value = ''; }); return; }
   if (e.target.matches('[data-act-day]')) { App.ui.absDay = e.target.value || today(); App.render(true); }
   if (e.target.matches('[data-act-month]')) { App.ui.absMonth = e.target.value || today().slice(0, 7); App.render(true); }
 });
 if ('serviceWorker' in navigator && !LOCAL) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 App.start();
+
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, e => { const d = $('#drop'); if (!d || !e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); d.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, e => { const d = $('#drop'); if (!d) return; if (t === 'drop' && e.dataTransfer && e.dataTransfer.files.length) { e.preventDefault(); addFiles(e.dataTransfer.files).catch(er => toast(er.message, true)); } if (t === 'drop' || !e.relatedTarget) d.classList.remove('over'); }));
+document.addEventListener('pointermove', e => { const c = e.target.closest && e.target.closest('.stat,.type,.hero,.login-brand'); if (!c) return; const r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px'); }, { passive: true });
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('label.att-btn')) { e.preventDefault(); e.target.querySelector('input').click(); } });

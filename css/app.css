@@ -418,3 +418,87 @@ button:hover>.avatar{transform:scale(1.06)}
   @keyframes sheetOut{to{transform:translateY(100%)}}
 }
 @media (prefers-reduced-motion:reduce){*,::view-transition-old(main),::view-transition-new(main){animation:none!important;transition:none!important}}
+
+/* ════════ v5 — المرفقات، حقول الدخول، تفاعلات إضافية ════════ */
+.attach{border:1.5px dashed #CFD9D3;border-radius:14px;background:#FCFBF7;padding:12px;transition:border-color .2s,background .2s,box-shadow .2s}
+.attach.over{border-color:var(--g500);background:var(--g50);box-shadow:0 0 0 4px rgba(31,142,120,.14)}
+.attach.has .att-hint{display:none}
+.attach-btns{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.att-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:transform .2s var(--ease),border-color .2s,background .2s,color .2s,box-shadow .2s}
+.att-btn svg.i{width:22px;height:22px;color:var(--g600);transition:transform .28s var(--ease),color .2s}
+.att-btn:hover,.att-btn:focus-visible{transform:translateY(-3px);border-color:#BFDCD2;background:var(--g50);color:var(--g800);box-shadow:0 10px 18px -12px rgba(14,69,61,.5)}
+.att-btn:hover svg.i{transform:scale(1.18) rotate(-6deg)}
+.att-btn:active{transform:scale(.95)}
+.att-hint{text-align:center;margin-top:10px}
+.att-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:10px}
+.att-list:empty{display:none}
+.att-item{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;min-width:0;animation:rise .35s var(--ease) both}
+.att-item img,.att-ic{width:44px;height:44px;border-radius:9px;flex:none;object-fit:cover}
+.att-ic{background:var(--g50);color:var(--g600);display:grid;place-items:center}
+.att-meta{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.4}
+.att-meta b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-meta span{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.att-item .rm{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ink-3);flex:none;transition:background .2s,color .2s,transform .2s}
+.att-item .rm:hover{background:var(--red-50);color:var(--red);transform:rotate(90deg)}
+.att-item .rm svg{width:16px;height:16px}
+.file .fsz{font-style:normal;font-size:11.5px;color:var(--ink-3);margin-inline-start:2px}
+.viewer{display:grid;place-items:center;background:#0d1b18;padding:14px}
+.viewer-img{max-width:100%;max-height:68dvh;border-radius:8px;display:block;animation:fade .3s ease}
+
+/* حقول بأيقونة */
+.inp-wrap{position:relative}
+.inp-wrap>svg.i{position:absolute;left:14px;top:50%;margin-top:-10px;color:var(--ink-3);pointer-events:none;transition:color .25s,transform .3s var(--ease)}
+.inp-wrap .input{padding-left:46px;padding-right:14px;text-align:left;min-height:50px;border-radius:12px;font-size:16px;letter-spacing:.02em}
+.inp-wrap.pw .input{padding-right:50px}
+.inp-wrap.pw .input[type=password]:not(:placeholder-shown){letter-spacing:.28em}
+.inp-wrap:focus-within>svg.i{color:var(--g600);transform:scale(1.15)}
+.inp-wrap .bar{position:absolute;inset-inline:14px;bottom:0;height:2.5px;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--g500));transform:scaleX(0);transition:transform .4s var(--ease);pointer-events:none}
+.inp-wrap:focus-within .bar{transform:scaleX(1)}
+.inp-wrap .input:focus{box-shadow:0 0 0 4px rgba(31,142,120,.14),0 10px 24px -16px rgba(14,69,61,.6);transform:translateY(-1px)}
+.inp-wrap .input{transition:border-color .2s,box-shadow .25s,transform .25s var(--ease)}
+.eye{position:absolute;right:6px;top:50%;margin-top:-19px;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--ink-3);transition:background .2s,color .2s,transform .2s var(--ease)}
+.eye:hover{background:var(--g50);color:var(--g700)}
+.eye:active{transform:scale(.88)}
+.eye.on{color:var(--g600)}
+.eye svg.i{animation:blink .3s var(--ease)}
+@keyframes blink{from{transform:scaleY(.2)}}
+.btn.lg{min-height:52px;font-size:16.5px;border-radius:12px;margin-top:6px}
+.shake{animation:shake .45s var(--ease)!important}
+@keyframes shake{20%{transform:translateX(9px)}40%{transform:translateX(-8px)}60%{transform:translateX(5px)}80%{transform:translateX(-3px)}}
+.err{animation:rise .3s var(--ease)}
+
+/* خلايا عائمة وإضاءة تتبع المؤشر */
+.cell{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.22);background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.2),rgba(255,255,255,.03) 60%);pointer-events:none;animation:floaty 9s ease-in-out infinite alternate}
+.cell::after{content:"";position:absolute;inset:32%;border-radius:50%;background:rgba(231,194,119,.42)}
+.c1{width:74px;height:74px;top:12%;inset-inline-start:46%;animation-duration:10s}
+.c2{width:38px;height:38px;top:62%;inset-inline-start:30%;animation-duration:7s;animation-delay:-2s}
+.c3{width:54px;height:54px;top:34%;inset-inline-start:70%;animation-duration:12s;animation-delay:-4s}
+.c4{width:26px;height:26px;top:80%;inset-inline-start:58%;animation-duration:8s;animation-delay:-1s}
+.c5{width:96px;height:96px;top:70%;inset-inline-start:8%;animation-duration:14s;animation-delay:-6s;opacity:.6}
+@keyframes floaty{from{transform:translate(0,0) rotate(0)}to{transform:translate(18px,-26px) rotate(40deg)}}
+.hero .cell{opacity:.5}.hero .c1{top:-18px;inset-inline-start:58%}.hero .c2{top:58%;inset-inline-start:44%}.hero .c3{top:18%;inset-inline-start:80%}
+.hero,.login-brand{--mx:50%;--my:50%}
+.hero::before,.login-brand::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx) var(--my),rgba(255,255,255,.1),transparent 60%);pointer-events:none;opacity:0;transition:opacity .4s}
+.hero:hover::before,.login-brand:hover::before{opacity:1}
+.login-brand{background:radial-gradient(900px circle at 85% 10%,#14594D 0,transparent 55%),radial-gradient(700px circle at 10% 95%,#0F4A40 0,transparent 55%),var(--g900)}
+.stat,.type{--mx:50%;--my:50%;background-image:radial-gradient(240px circle at var(--mx) var(--my),rgba(31,142,120,.09),transparent 65%);background-repeat:no-repeat}
+.brand-mark{transition:transform .5s var(--ease)}
+.brand:hover .brand-mark{transform:rotate(-8deg) scale(1.06)}
+.top h1{position:relative}
+.view~* {}
+.tabbar{backdrop-filter:blur(10px);background:rgba(255,255,255,.92)}
+
+@media (max-width:900px){
+  .attach-btns{grid-template-columns:repeat(4,1fr)}
+  .att-list{grid-template-columns:1fr}
+  .login{grid-template-rows:auto 1fr}
+  .login-brand{display:flex;padding:calc(26px + env(safe-area-inset-top)) 22px 30px;min-height:0;gap:22px;border-radius:0 0 28px 28px}
+  .login-brand h1{font-size:23px;line-height:1.45}
+  .login-brand .lead,.login-brand .foot{display:none}
+  .login-brand .helix-bg{height:260px;top:-30px}
+  .login-card .brand{display:none}
+  .login-form{place-items:start center;padding-top:26px}
+  .c5,.c4{display:none}
+  .login-brand .cell{opacity:.3}
+  .login-brand .c1{top:8%;inset-inline-start:72%}.login-brand .c2{top:66%;inset-inline-start:84%}.login-brand .c3{top:58%;inset-inline-start:6%}
+}

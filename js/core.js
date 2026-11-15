@@ -46,7 +46,15 @@ const P = {
   dots: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
   share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13',
   lock: 'M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4',
-  note: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'
+  note: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  image: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21',
+  camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  mic: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8',
+  video: 'M23 7l-7 5 7 5zM3 5h11a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z',
+  archive: 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
+  link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  eyeoff: 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.500 0 0 1-2.16 3.19M1 1l22 22M14.12 14.12a3 3 0 1 1-4.24-4.24'
 };
 const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[n] || P.file}"/></svg>`;
 const HELIX = cls => `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><path class="rung" d="M19 11h10M17.500 15h13M17.500 33h13M19 37h10M19 22h10M19 26h10"/><path d="M16 5c0 10 16 9 16 19S16 33 16 43"/><path d="M32 5c0 10-16 9-16 19s16 9 16 19"/></svg>`;
@@ -239,22 +247,70 @@ async function run(btn, fn) {
   finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = old; } }
 }
 
-/* files */
-function readFiles(input) {
-  return Promise.all([...input.files].map(f => new Promise((ok, no) => {
-    if (f.size > 2 * 1024 * 1024) return no(new Error(`الملف «${f.name}» أكبر من 2 ميغابايت`));
-    const fr = new FileReader();
-    fr.onload = () => ok({ name: f.name, mime: f.type || 'application/octet-stream', data: String(fr.result).split(',')[1] });
-    fr.onerror = () => no(new Error('تعذّرت قراءة الملف')); fr.readAsDataURL(f);
-  })));
+/* files & attachments */
+const STORE_URL = (LOCAL ? '' : CFG.url) + '/storage/v1/object', BUCKET = 'biora-files';
+const MAX_FILE = 20 * 1024 * 1024, MAX_FILES = 8;
+const fmtSize = b => !b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' م.ب' : Math.max(1, Math.round(b / 1024)) + ' ك.ب';
+const fileKind = (mime, name) => {
+  mime = mime || ''; name = name || '';
+  if (mime === 'text/uri-list') return 'link'; if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('audio/')) return 'audio'; if (mime.startsWith('video/')) return 'video';
+  if (/pdf/.test(mime) || /\.pdf$/i.test(name)) return 'pdf';
+  if (/zip|rar|7z|compressed/.test(mime) || /\.(zip|rar|7z)$/i.test(name)) return 'zip';
+  return 'doc';
+};
+const KIND_ICON = { image: 'image', audio: 'mic', video: 'video', pdf: 'file', zip: 'archive', doc: 'file', link: 'link' };
+const fileChip = f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span>${f.size && f.mime !== 'text/uri-list' ? `<i class="fsz num">${fmtSize(f.size)}</i>` : ''}</button>`;
+const toB64 = blob => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = () => no(new Error('تعذّرت قراءة الملف')); fr.readAsDataURL(blob); });
+async function shrinkImage(f) {
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type) || f.size < 500 * 1024) return f;
+  try {
+    const bmp = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .82));
+    if (blob && blob.size < f.size) return new File([blob], f.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {}
+  return f;
+}
+async function addFiles(list) {
+  for (const f0 of [...list]) {
+    if (App._files.length >= MAX_FILES) { toast(`الحد الأقصى ${MAX_FILES} مرفقات`, true); break; }
+    const f = await shrinkImage(f0);
+    if (f.size > MAX_FILE) { toast(`«${f.name}» أكبر من 20 ميغابايت. للملفات الكبيرة استخدم زر «رابط»`, true); continue; }
+    App._files.push({ name: f.name || 'ملف', mime: f.type || 'application/octet-stream', size: f.size, blob: f, url: /^image\//.test(f.type) ? URL.createObjectURL(f) : '' });
+  }
+  App.drawFiles();
+}
+async function uploadFiles(files) {
+  const out = [];
+  for (const f of files) {
+    if (f.link) { out.push({ name: f.name, mime: 'text/uri-list', link: f.link, data: 'link:' + f.link }); continue; }
+    const ext = ((f.name.match(/\.([a-z0-9]{1,8})$/i) || [])[1] || 'bin').toLowerCase();
+    const path = `${new Date().getFullYear()}/${crypto.randomUUID()}.${ext}`;
+    let res;
+    try {
+      res = await fetch(`${STORE_URL}/${BUCKET}/${path}`, { method: 'POST', body: f.blob,
+        headers: { ...(LOCAL ? {} : { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key }), 'Content-Type': f.mime, 'x-upsert': 'false' } });
+    } catch { throw new Error('انقطع الاتصال أثناء رفع الملف. حاول مرة أخرى'); }
+    if (res.ok) { out.push({ name: f.name, mime: f.mime, size: f.size, path, data: 'url:' + path }); continue; }
+    if (f.size <= 2 * 1024 * 1024) { out.push({ name: f.name, mime: f.mime, data: await toB64(f.blob) }); continue; }
+    throw new Error(res.status === 413 ? `«${f.name}» أكبر من الحد المسموح` : `تعذّر رفع «${f.name}». مخزن الملفات غير مفعّل بعد، والحد المتاح الآن 2 ميغابايت`);
+  }
+  return out;
 }
 async function openFile(id) {
-  const f = await api('get_file', { id });
-  const bin = atob(f.data), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([a], { type: f.mime || 'application/octet-stream' }));
-  const l = document.createElement('a'); l.href = url;
-  if (/^(image|application\/pdf)/.test(f.mime || '')) { l.target = '_blank'; l.rel = 'noopener'; } else l.download = f.name;
-  document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  const f = await api('get_file', { id }), d = f.data || '';
+  const click = (href, o) => { const l = document.createElement('a'); l.href = href; Object.assign(l, o); document.body.appendChild(l); l.click(); l.remove(); };
+  if (d.startsWith('link:')) return click(d.slice(5), { target: '_blank', rel: 'noopener noreferrer' });
+  let src;
+  if (d.startsWith('url:')) src = `${STORE_URL}/public/${BUCKET}/${d.slice(4)}`;
+  else { const bin = atob(d), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); src = URL.createObjectURL(new Blob([a], { type: f.mime || 'application/octet-stream' })); }
+  const kind = fileKind(f.mime, f.name), dl = d.startsWith('url:') ? src + '?download=' + encodeURIComponent(f.name) : src;
+  const media = kind === 'image' ? `<img class="viewer-img" src="${h(src)}" alt="${h(f.name)}">` : kind === 'audio' ? `<audio controls autoplay src="${h(src)}" style="width:100%"></audio>`
+    : kind === 'video' ? `<video controls autoplay playsinline src="${h(src)}" class="viewer-img"></video>` : '';
+  if (!media) return kind === 'pdf' ? click(src, { target: '_blank', rel: 'noopener' }) : click(dl, { download: f.name });
+  Modal.open(Modal.head(h(f.name)) + `<div class="modal-b viewer">${media}</div><div class="modal-f"><a class="btn ghost" href="${h(dl)}" download="${h(f.name)}" target="_blank" rel="noopener">${ic('download')}تنزيل</a><button class="btn" data-act="close">إغلاق</button></div>`);
 }
 function downloadCSV(name, rows) {
   const csv = '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
