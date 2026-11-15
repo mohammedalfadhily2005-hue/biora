@@ -377,7 +377,7 @@ const App = {
     Modal.closeAll();
     Modal.open(Modal.head(x ? 'تعديل البيانات' : 'إضافة حساب جديد', x ? h(x.name) : '') + `<form data-submit="saveStaff" data-id="${x ? x.id : ''}" style="display:contents"><div class="modal-b"><div class="grid2">
       <div class="field full"><label for="sn">الاسم الرباعي مع اللقب <span class="req">*</span></label><input class="input" id="sn" name="name" value="${v('name')}" required maxlength="120"></div>
-      ${x ? '' : `<div class="field"><label for="su">اسم المستخدم <span class="req">*</span></label><input class="input" id="su" name="username" dir="ltr" required pattern="[a-zA-Z0-9._-]{2,30}" title="أحرف إنجليزية وأرقام فقط" maxlength="30"></div>
+      ${x ? '' : `<div class="field"><label for="su">اسم المستخدم <span class="req">*</span></label><input class="input" id="su" name="username" dir="ltr" required pattern="[a-zA-Z0-9._\\-]{2,30}" title="أحرف إنجليزية وأرقام فقط" maxlength="30"></div>
         <div class="field"><label for="sr">نوع الحساب</label><select class="input" id="sr" name="role"><option value="faculty"${isF ? ' selected' : ''}>تدريسي</option><option value="dean">عميد الكلية</option><option value="dean_asst">معاون العميد</option><option value="unit"${isF ? '' : ' selected'}>شعبة في العمادة</option></select></div>`}
       <div class="field"><label for="sk">اللقب العلمي</label><select class="input" id="sk" name="rank"><option value="">— لا ينطبق —</option>${RANKS.map(k => `<option value="${k}"${x && x.rank === k ? ' selected' : ''}>${RANK_LABEL[k]}</option>`).join('')}</select></div>
       <div class="field"><label for="sd">تاريخ الحصول على اللقب</label><input class="input" id="sd" name="rank_date" type="date" value="${v('rank_date')}"></div>
@@ -550,8 +550,21 @@ const App = {
         <div class="field"><label for="p2">الجديدة (6 أحرف على الأقل)</label><input class="input" id="p2" name="nw" type="password" dir="ltr" autocomplete="new-password" minlength="6" required></div>
         <button class="btn soft block" type="submit">${ic('lock')}تغيير كلمة المرور</button></form></div>
       ${standalone ? '' : `<div class="card pad" style="margin-top:16px"><h3 style="font-size:16px;margin-bottom:6px">تنصيب التطبيق</h3><p class="small muted" style="margin-bottom:12px">${App.installEvt ? 'أضف BIORA كأيقونة على جهازك ليفتح مثل أي تطبيق.' : ios ? 'في Safari: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».' : 'من قائمة المتصفح (⋮) اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».'}</p>${App.installEvt ? `<button class="btn gold block" data-act="install">${ic('download')}تنصيب BIORA</button>` : ''}</div>`}
-      <button class="btn danger block" style="margin-top:16px" data-act="logout">${ic('logout')}تسجيل الخروج</button>
+      <button class="btn ghost block" style="margin-top:16px" data-act="help">${ic('note')}دليل الاستخدام</button>
+      <button class="btn danger block" style="margin-top:10px" data-act="logout">${ic('logout')}تسجيل الخروج</button>
       <p class="small muted" style="text-align:center;margin-top:14px">BIORA · ${h(s.department)} · <span class="num">${h(s.year)}</span></p></div></div>`;
+  },
+  help() {
+    const r = me().role, S = (t, a) => `<div class="sub-h" style="margin-top:14px">${t}</div><ol style="margin:0;padding-inline-start:20px;line-height:2">${a.map(x => `<li>${x}</li>`).join('')}</ol>`;
+    let b = '';
+    if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».']);
+    if (r === 'head') b += S('البتّ بطلبات التدريسيين', ['الطلبات الواردة تظهر في «بانتظار قرارك».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى العمادة، إرجاع للتعديل، أو رفض.', 'كل طلب يُحفظ في «الأرشيف الكامل» ويمكن البحث عنه بالتاريخ أو الاسم.'])
+      + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.'])
+      + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
+    if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
+    if (r === 'unit') b += S('الطلبات المحوَّلة', ['تظهر عندكم فقط الطلبات التي حوّلتها العمادة إلى شعبتكم.', 'افتح الطلب واضغط «تم الإنجاز»، أو «إرجاع إلى العمادة» مع السبب.']);
+    b += S('عام', ['الجرس في الأعلى يعرض الإشعارات.', 'زر «طباعة» داخل أي طلب يخرجه بترويسة رسمية.', 'من «حسابي» يمكنك تغيير كلمة المرور وتنصيب التطبيق كأيقونة.']);
+    Modal.open(Modal.head('دليل الاستخدام', h(ROLE_LABEL[r])) + `<div class="modal-b">${b}</div><div class="modal-f"><button class="btn" data-act="close">فهمت</button></div>`);
   },
   saveMe(form) { run($('button[type=submit]', form), async () => { await api('update_me', { phone: form.phone.value, email: form.email.value }); App.render(true); toast('حُفظت بيانات الاتصال'); }); },
   saveOrg(form) { run($('button[type=submit]', form), async () => { await api('save_settings', { ministry: form.ministry.value.trim(), university: form.university.value.trim(), college: form.college.value.trim(), department: form.department.value.trim(), year: form.year.value.trim() }); App.render(true); toast('حُفظت بيانات المؤسسة'); }); },
