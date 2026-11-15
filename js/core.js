@@ -99,7 +99,7 @@ async function api(action, payload = {}) {
   if (j && j.state) setState(j.state);
   return j || {};
 }
-function setState(s) { ST = s; U = {}; s.users.forEach(x => U[x.id] = x); }
+function setState(s) { if (s.settings && !s.settings.university) s.settings.university = 'جامعة ذي قار'; ST = s; U = {}; s.users.forEach(x => U[x.id] = x); }
 
 /* ── roles & labels ── */
 const me = () => ST.me;

@@ -94,7 +94,7 @@ const App = {
     return `<div class="login"><section class="login-brand">${HELIX_BG}${BRAND}
       <div><h1>معاملات قسم علوم الحياة،<br><em>من الورق إلى ضغطة واحدة.</em></h1>
       <p class="lead">قدّم طلبك، تابع مساره من رئاسة القسم إلى العمادة، واستلم النتيجة — كل ذلك من مكان واحد.</p></div>
-      <div class="foot">كلية العلوم — قسم علوم الحياة · العام الدراسي <span class="num">2026-2027</span></div></section>
+      <div class="foot">جامعة ذي قار — كلية العلوم — قسم علوم الحياة · العام الدراسي <span class="num">2026-2027</span></div></section>
       <section class="login-form"><form class="login-card" data-submit="login" autocomplete="on">${BRAND}
         <h2>تسجيل الدخول</h2><p class="muted">أدخل اسم المستخدم وكلمة المرور المسلَّمة لك من رئاسة القسم.</p>
         <div class="err" hidden></div>
