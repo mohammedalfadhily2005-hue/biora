@@ -223,9 +223,9 @@ const Modal = {
     const f = $('[autofocus]', o); if (f) setTimeout(() => f.focus(), 60);
     return o;
   },
-  close(o) { o = o || $('#modals').lastElementChild; if (!o) return; o.remove(); if (!$('#modals').children.length && App.dirty) App.render(); },
+  close(o) { o = o || $('#modals').lastElementChild; if (!o || o.dataset.closing) return; o.dataset.closing = '1'; o.classList.add('closing'); setTimeout(() => { o.remove(); if (!Modal.any() && App.dirty) App.render(); }, 170); },
   closeAll() { $('#modals').innerHTML = ''; },
-  any: () => $('#modals').children.length > 0,
+  any: () => $$('#modals > .overlay').some(o => !o.dataset.closing),
   head: (title, sub, locked) => `<div class="modal-h"><h3>${title}${sub ? `<span class="sub">${sub}</span>` : ''}</h3>${locked ? '' : `<button class="icon-btn" data-act="close" aria-label="إغلاق">${ic('x')}</button>`}</div>`
 };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && Modal.any()) { const o = $('#modals').lastElementChild; if (!o.dataset.locked) Modal.close(o); } });

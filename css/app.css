@@ -290,3 +290,131 @@ button.row:hover{background:var(--g50)}
   .p-sign div{width:40%}
 }
 @supports (padding:env(safe-area-inset-top)){.top{padding-top:calc(12px + env(safe-area-inset-top))}.login-form{padding-top:calc(32px + env(safe-area-inset-top))}}
+
+/* ════════ v3 — الحركة والتأثيرات ════════ */
+:root{view-transition-name:none}
+.main{view-transition-name:main}
+::view-transition-old(main){animation:vtOut .16s ease both}
+::view-transition-new(main){animation:vtIn .36s var(--ease) both}
+@keyframes vtOut{to{opacity:0;transform:translateY(-6px)}}
+@keyframes vtIn{from{opacity:0;transform:translateY(14px)}}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+.view{animation:none}
+.view .hero{animation:rise .5s var(--ease) both}
+.view .stat,.view .type,.view .list>.row,.view .list>.att-row,.view .list>.group-h,.view .bar,.view .sec-head,.view .filters,.view .seg{animation:rise .46s var(--ease) both;animation-delay:.34s}
+.view .stat:nth-child(1),.view .type:nth-child(1),.view .list>:nth-child(1){animation-delay:.05s}
+.view .stat:nth-child(2),.view .type:nth-child(2),.view .list>:nth-child(2){animation-delay:.09s}
+.view .stat:nth-child(3),.view .type:nth-child(3),.view .list>:nth-child(3){animation-delay:.13s}
+.view .stat:nth-child(4),.view .type:nth-child(4),.view .list>:nth-child(4){animation-delay:.17s}
+.view .type:nth-child(5),.view .list>:nth-child(5){animation-delay:.2s}
+.view .type:nth-child(6),.view .list>:nth-child(6){animation-delay:.23s}
+.view .type:nth-child(7),.view .list>:nth-child(7){animation-delay:.26s}
+.view .type:nth-child(8),.view .list>:nth-child(8){animation-delay:.29s}
+.view .type:nth-child(9),.view .list>:nth-child(9){animation-delay:.31s}
+.view .type:nth-child(10),.view .list>:nth-child(10){animation-delay:.33s}
+.view .sec-head,.view .filters,.view .seg{animation-delay:.04s}
+
+/* الأزرار */
+.btn{position:relative;overflow:hidden;isolation:isolate;transition:background .2s,transform .18s var(--ease),box-shadow .22s,border-color .2s}
+.btn::after{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(circle at var(--rx,50%) var(--ry,50%),rgba(255,255,255,.42) 0,transparent 55%);opacity:0;transform:scale(2.2);transition:opacity .6s,transform .6s}
+.btn:active::after{opacity:1;transform:scale(.2);transition:none}
+.btn:not(.ghost):not(.soft):not(.danger){box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 1px 2px rgba(16,35,31,.18)}
+.btn:not(.ghost):not(.soft):not(.danger):hover{transform:translateY(-1.5px);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 10px 20px -8px rgba(14,69,61,.6)}
+.btn.gold:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 22px -8px rgba(196,146,58,.75)}
+.btn.ghost:hover,.btn.soft:hover,.btn.danger:hover{transform:translateY(-1px);box-shadow:0 6px 14px -8px rgba(16,35,31,.3)}
+.btn:active{transform:translateY(0) scale(.98)!important}
+.btn svg.i{transition:transform .28s var(--ease)}
+.btn:hover svg.i{transform:scale(1.14)}
+.btn.gold::before{content:"";position:absolute;top:0;bottom:0;width:46%;inset-inline-start:-60%;z-index:-1;background:linear-gradient(100deg,transparent,rgba(255,255,255,.34),transparent);transform:skewX(-18deg);transition:inset-inline-start .7s var(--ease)}
+.btn.gold:hover::before{inset-inline-start:120%}
+.icon-btn{transition:background .2s,transform .2s var(--ease)}
+.icon-btn:hover{transform:translateY(-1px)}
+.icon-btn:active{transform:scale(.92)}
+.icon-btn:hover svg.i{animation:ring .6s var(--ease)}
+@keyframes ring{20%{transform:rotate(-12deg)}50%{transform:rotate(10deg)}80%{transform:rotate(-5deg)}}
+.dot{animation:popIn .4s var(--ease)}
+@keyframes popIn{from{transform:scale(0)}}
+
+/* الشريط الجانبي */
+.nav a{position:relative;transition:background .22s,color .22s,padding .22s var(--ease)}
+.nav a svg.i{transition:transform .28s var(--ease)}
+.nav a:hover{padding-inline-start:16px}
+.nav a:hover svg.i{transform:scale(1.12)}
+.nav a.on{background:linear-gradient(90deg,var(--g600),var(--g700))}
+.side-user{transition:background .2s,transform .2s var(--ease)}
+.side-user:hover{transform:translateY(-2px)}
+.side .helix-bg,.hero .helix-bg{animation:drift 11s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translateY(-8px) rotate(-1.5deg)}to{transform:translateY(10px) rotate(1.5deg)}}
+
+/* البطاقات والقوائم */
+.hero{background:linear-gradient(115deg,var(--g900) 0%,var(--g800) 45%,#17685B 100%);box-shadow:0 18px 40px -22px rgba(10,51,45,.8)}
+.card{transition:box-shadow .25s,transform .25s var(--ease),border-color .25s}
+.stat{position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;inset-inline:0;bottom:0;height:3px;background:var(--tone,var(--g500));transform:scaleX(0);transform-origin:right;transition:transform .35s var(--ease)}
+.stat:hover::after{transform:scaleX(1)}
+.stat .k i{transition:transform .3s var(--ease)}
+.stat:hover .k i{transform:scale(1.6)}
+.type .ti{transition:background .25s,color .25s,transform .3s var(--ease)}
+.type:hover .ti{background:var(--g600);color:#fff;transform:scale(1.08) rotate(-4deg)}
+button.row{position:relative;transition:background .18s,padding .22s var(--ease)}
+button.row::before{content:"";position:absolute;inset-inline-start:0;top:22%;bottom:22%;width:3px;border-radius:3px;background:var(--gold);transform:scaleY(0);transition:transform .22s var(--ease)}
+button.row:hover::before{transform:scaleY(1)}
+button.row:hover{padding-inline-start:22px}
+.row .ti{transition:background .22s,color .22s}
+button.row:hover .ti{background:var(--g600);color:#fff}
+.chip{transition:transform .2s var(--ease)}
+.seg button{transition:background .25s,color .25s,box-shadow .25s,transform .15s}
+.seg button:active{transform:scale(.96)}
+.seg button.on{animation:segIn .28s var(--ease)}
+@keyframes segIn{from{transform:scale(.94);opacity:.6}}
+.att-opts button{transition:all .18s var(--ease)}
+.att-opts button:hover{transform:translateY(-1px);border-color:#BFDCD2}
+.att-opts button.on{animation:segIn .25s var(--ease)}
+.input{transition:border-color .2s,box-shadow .2s,background .2s}
+.input:hover{border-color:#CBD8D2}
+.file{transition:all .2s var(--ease)}
+.file:hover{transform:translateY(-1px)}
+.avatar{transition:transform .25s var(--ease)}
+button:hover>.avatar{transform:scale(1.06)}
+
+/* النوافذ */
+.overlay{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.overlay.closing{animation:fadeOut .17s ease forwards;pointer-events:none}
+.overlay.closing .modal{animation:popOut .17s ease forwards}
+@keyframes fadeOut{to{opacity:0}}
+@keyframes popOut{to{opacity:0;transform:translateY(12px) scale(.98)}}
+.modal-b .ev{animation:rise .4s var(--ease) both}
+.modal-b .ev:nth-child(2){animation-delay:.06s}.modal-b .ev:nth-child(3){animation-delay:.12s}.modal-b .ev:nth-child(4){animation-delay:.18s}.modal-b .ev:nth-child(n+5){animation-delay:.24s}
+.ev::before{transition:transform .2s var(--ease)}
+.ev:hover::before{transform:scale(1.25)}
+.toast{animation:toastIn .38s var(--ease)}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px) scale(.94)}}
+
+/* قرار العمادة */
+.decision{margin-top:14px;border-radius:12px;padding:12px 16px;border:1px solid;display:flex;flex-direction:column;gap:2px;animation:rise .4s var(--ease) both}
+.decision span{font-size:12.5px;color:var(--ink-3)}
+.decision p{margin-top:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+.decision.green{background:var(--g50);border-color:#BFDCD2}.decision.green b{color:var(--g700)}
+.decision.red{background:var(--red-50);border-color:#EBC9C0}.decision.red b{color:var(--red)}
+.decision.amber{background:var(--amber-50);border-color:#EBD6A8}.decision.amber b{color:var(--amber)}
+
+/* الدخول */
+.login-card>*{animation:rise .55s var(--ease) both}
+.login-card>:nth-child(2){animation-delay:.06s}.login-card>:nth-child(3){animation-delay:.1s}.login-card>:nth-child(5){animation-delay:.16s}.login-card>:nth-child(6){animation-delay:.22s}.login-card>:nth-child(7){animation-delay:.28s}.login-card>:nth-child(8){animation-delay:.34s}
+.login-brand .helix-bg path{stroke-dasharray:1500;stroke-dashoffset:1500;animation:draw 2.6s .2s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.login-brand h1,.login-brand .lead{animation:rise .7s .15s var(--ease) both}
+.login-brand .lead{animation-delay:.3s}
+
+@media (max-width:900px){
+  .tabbar a{transition:color .2s}
+  .tabbar a svg.i{transition:transform .3s var(--ease)}
+  .tabbar a.on svg.i{transform:translateY(-2px) scale(1.1)}
+  .tabbar a.on::before{content:"";position:absolute;top:-6px;inset-inline-start:50%;width:30px;height:3px;margin-inline-start:-15px;border-radius:0 0 4px 4px;background:var(--gold);animation:segIn .3s var(--ease)}
+  .tabbar a:active{transform:scale(.94)}
+  .nav a:hover{padding-inline-start:12px}
+  button.row:hover{padding-inline-start:14px}
+  .overlay.closing .modal{animation:sheetOut .2s ease forwards}
+  @keyframes sheetOut{to{transform:translateY(100%)}}
+}
+@media (prefers-reduced-motion:reduce){*,::view-transition-old(main),::view-transition-new(main){animation:none!important;transition:none!important}}

@@ -6,7 +6,8 @@ const App = {
 
   /* ───── boot / auth ───── */
   async start() {
-    window.addEventListener('hashchange', () => { App.route = (location.hash || '#home').slice(1) || 'home'; if (ST) App.render(); });
+    window.addEventListener('hashchange', () => { App.route = (location.hash || '#home').slice(1) || 'home'; if (!ST) return; if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches && !Modal.any()) document.startViewTransition(() => App.render()); else App.render(); });
+    document.addEventListener('pointerdown', e => { const b = e.target.closest('.btn'); if (!b) return; const r = b.getBoundingClientRect(); b.style.setProperty('--rx', (e.clientX - r.left) / r.width * 100 + '%'); b.style.setProperty('--ry', (e.clientY - r.top) / r.height * 100 + '%'); });
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); App.installEvt = e; if (ST && App.route === 'profile') App.render(); });
     window.addEventListener('scroll', () => { const t = $('.top'); if (t) t.classList.toggle('scrolled', scrollY > 4); }, { passive: true });
     document.addEventListener('click', App.onClick);
@@ -84,8 +85,15 @@ const App = {
       <main class="main"><div class="${anim ? 'view' : ''}" id="view">${App['v_' + App.route]()}</div></main>
       <nav class="tabbar">${items.map(i => link(i, 'tab')).join('')}</nav></div>`;
     if (!anim) scrollTo(0, y); else scrollTo(0, 0);
+    if (anim) { App.countUp(); clearTimeout(App._va); App._va = setTimeout(() => { const v = $('#view'); if (v) v.classList.remove('view'); }, 1100); }
     App.lastRoute = App.route;
     if (m.must_change && !Modal.any()) App.forcePassword();
+  },
+  countUp() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    $$('#view .stat .v').forEach(el => { const n = +el.textContent; if (!(n > 0)) return; const t0 = performance.now(), d = 650;
+      const step = t => { const k = Math.min(1, (t - t0) / d); el.textContent = Math.round(n * (1 - Math.pow(1 - k, 3))); if (k < 1 && el.isConnected) requestAnimationFrame(step); else el.textContent = n; };
+      el.textContent = 0; requestAnimationFrame(step); });
   },
   short: t => ({ 'لوحة التحكم': 'الرئيسية', 'الكتب والتعاميم': 'الكتب', 'الوارد من القسم': 'الوارد', 'المحوَّل إلينا': 'الطلبات' }[t] || t),
   badges() { /* light refresh while a modal is open */ },
@@ -468,10 +476,40 @@ const App = {
     const L = u.letTab === 'in' ? inbox : out, unread = inbox.filter(l => l.rcpt.some(c => c.user_id === m.id && !c.read_at)).length;
     const row = l => { const un = l.from_id !== m.id && l.rcpt.some(c => c.user_id === m.id && !c.read_at);
       return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic(l.kind === 'circular' ? 'users' : 'mail')}</span><span class="mid"><b>${h(l.subject)}</b><span>${u.letTab === 'in' ? 'من: ' + h(upos(l.from_id)) : 'إلى: ' + h(l.to_label || '')}</span></span>
-        <span class="end">${l.kind === 'circular' ? '<span class="chip green plain">تعميم</span>' : ''}<span class="date"><span class="num">${h(l.ref)}</span> · ${ago(l.created_at)}</span></span></button>`; };
+        <span class="end">${l.kind === 'circular' ? '<span class="chip green plain">تعميم</span>' : App.decChip(l)}<span class="date"><span class="num">${h(l.ref)}</span> · ${ago(l.created_at)}</span></span></button>`; };
     return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px">${isFac() ? '' : `<div class="seg"><button class="${u.letTab === 'in' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="in">الوارد<span class="n num">${unread || inbox.length}</span></button><button class="${u.letTab === 'out' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="out">الصادر<span class="n num">${out.length}</span></button></div>`}
       <span style="flex:1"></span>${isFac() ? '' : `<button class="btn" data-act="compose">${ic('plus')}كتاب جديد</button>`}</div>
       <div class="card list">${L.map(row).join('') || App.empty(u.letTab === 'in' ? 'لا توجد كتب واردة' : 'لم ترسل كتباً بعد', isFac() ? 'ستظهر هنا تعاميم رئاسة القسم.' : '', 'mail')}</div>`;
+  },
+  DEC: { accept: ['موافقة', 'موافَق عليه', 'green'], reject: ['رفض', 'مرفوض', 'red'], return: ['إعادة', 'مُعاد إلى القسم', 'amber'] },
+  isDecision: l => /^قرار العمادة: /.test(l.subject) && U[l.from_id] && ['dean', 'dean_asst'].includes(U[l.from_id].role),
+  decision(l) {
+    const r = ST.letters.filter(x => x.parent_id === l.id && App.isDecision(x)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    if (!r) return null;
+    const k = Object.keys(App.DEC).find(k => r.subject.startsWith('قرار العمادة: ' + App.DEC[k][0]));
+    return k ? { k, letter: r } : null;
+  },
+  needsDecision: l => l.kind === 'letter' && !l.parent_id && U[l.from_id] && U[l.from_id].role === 'head' && (isDean() ? l.rcpt.some(c => c.user_id === me().id) : /عماد|عميد|معاون/.test(l.to_label || '')),
+  decChip(l) {
+    if (App.isDecision(l)) return '<span class="chip blue plain">قرار العمادة</span>';
+    const d = App.decision(l);
+    if (d) return `<span class="chip ${App.DEC[d.k][2]}">${App.DEC[d.k][1]}</span>`;
+    return App.needsDecision(l) ? '<span class="chip amber">بانتظار قرار العمادة</span>' : '';
+  },
+  decide(el) {
+    const l = ST.letters.find(x => x.id === el.dataset.id), k = el.dataset.d, need = k !== 'accept';
+    const T = { accept: ['الموافقة على الكتاب', 'ستُبلَّغ رئاسة القسم بموافقة العمادة.', 'تأكيد الموافقة'], reject: ['رفض الكتاب', 'اكتب سبب الرفض ليصل إلى رئاسة القسم.', 'تأكيد الرفض'], return: ['إعادة الكتاب إلى القسم', 'اكتب المطلوب استكماله أو تعديله.', 'إعادة الكتاب'] }[k];
+    Modal.open(Modal.head(T[0], h(l.subject)) + `<form data-submit="doDecide" data-id="${l.id}" data-d="${k}" style="display:contents"><div class="modal-b"><p class="muted" style="margin-bottom:14px">${T[1]}</p>
+      <div class="field"><label for="dn">${need ? 'السبب <span class="req">*</span>' : 'ملاحظة (اختياري)'}</label><textarea class="input" id="dn" name="note" ${need ? 'required' : ''} autofocus maxlength="1500"></textarea></div></div>
+      <div class="modal-f"><button class="btn${k === 'reject' ? ' danger' : ''}" type="submit">${T[2]}</button><button class="btn ghost" type="button" data-act="close">تراجع</button></div></form>`, { narrow: 1 });
+  },
+  doDecide(form) {
+    const l = ST.letters.find(x => x.id === form.dataset.id), k = form.dataset.d, note = form.note.value.trim();
+    const ids = [l.from_id, ...ST.users.filter(x => ['dean', 'dean_asst'].includes(x.role) && x.active && x.id !== me().id).map(x => x.id)];
+    run($('button[type=submit]', form), async () => {
+      await api('send_letter', { to: 'ids', ids, subject: `قرار العمادة: ${App.DEC[k][0]} — ${l.subject}`.slice(0, 200), body: note || { accept: 'تمت الموافقة على الكتاب.', reject: '', return: '' }[k], parent_id: l.id });
+      Modal.closeAll(); App.render(true); toast({ accept: 'سُجّلت الموافقة وأُبلغ القسم', reject: 'سُجّل الرفض وأُبلغ القسم', return: 'أُعيد الكتاب إلى القسم' }[k]);
+    });
   },
   openLetter(el) {
     const l = ST.letters.find(x => x.id === el.dataset.id), m = me(), mineL = l.from_id === m.id;
@@ -479,10 +517,12 @@ const App = {
     Modal.open(Modal.head(h(l.subject), `العدد <span class="num">${h(l.ref)}</span> · ${fmtDT(l.created_at)}`) + `<div class="modal-b">
       <dl class="dl"><div><dt>من</dt><dd>${h(upos(l.from_id))}${U[l.from_id] && U[l.from_id].position ? ' — ' + h(uname(l.from_id)) : ''}</dd></div><div><dt>إلى</dt><dd>${h(l.to_label || '')}</dd></div>
       <div class="full"><dt>نص الكتاب</dt><dd>${h(l.body) || '—'}</dd></div></dl>
+      ${(() => { const d = App.decision(l); if (d) return `<div class="decision ${App.DEC[d.k][2]}"><b>قرار العمادة: ${App.DEC[d.k][1]}</b><span>${h(upos(d.letter.from_id))} · ${fmtDT(d.letter.created_at)}</span>${d.letter.body ? `<p>${h(d.letter.body)}</p>` : ''}</div>`; return App.needsDecision(l) ? '<div class="decision amber"><b>بانتظار قرار العمادة</b><span>لم يُبتّ بهذا الكتاب بعد.</span></div>' : ''; })()}
       ${par ? `<p class="small muted" style="margin-top:10px">رداً على / إحالةً لـ: ${h(par.subject)} (<span class="num">${h(par.ref)}</span>)</p>` : ''}
       ${l.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${l.files.map(f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic('clip')}<span>${h(f.name)}</span></button>`).join('')}</div>` : ''}
       ${mineL ? `<div class="sub-h">الاطلاع (<span class="num">${read}</span> من <span class="num">${l.rcpt.length}</span>)</div><div class="card list" style="max-height:220px;overflow:auto">${l.rcpt.map(c => `<div class="row" style="padding:9px 14px"><span class="mid"><b>${h(upos(c.user_id))}</b></span><span class="chip ${c.read_at ? 'green' : 'gray'}">${c.read_at ? 'اطّلع' : 'لم يطّلع'}</span></div>`).join('')}</div>` : ''}</div>
-      <div class="modal-f">${!mineL && !isFac() ? `<button class="btn" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
+      <div class="modal-f">${isDean() && !mineL && App.needsDecision(l) && !App.decision(l) ? `<button class="btn" data-act="decide" data-d="accept" data-id="${l.id}">${ic('check')}موافقة</button><button class="btn ghost" data-act="decide" data-d="return" data-id="${l.id}">${ic('undo')}إعادة للقسم</button><button class="btn danger" data-act="decide" data-d="reject" data-id="${l.id}">${ic('x')}رفض</button>` : ''}
+        ${!mineL && !isFac() ? `<button class="btn ${isDean() && App.needsDecision(l) && !App.decision(l) ? 'ghost' : ''}" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
         ${isHead() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="staff">${ic('users')}تعميم على الكادر</button>` : ''}
         ${isDean() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="units">${ic('share')}إحالة إلى الشعب</button>` : ''}
         <span class="sp"></span><button class="btn ghost" data-act="close">إغلاق</button></div>`);
@@ -560,8 +600,8 @@ const App = {
     if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».']);
     if (r === 'head') b += S('البتّ بطلبات التدريسيين', ['الطلبات الواردة تظهر في «بانتظار قرارك».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى العمادة، إرجاع للتعديل، أو رفض.', 'كل طلب يُحفظ في «الأرشيف الكامل» ويمكن البحث عنه بالتاريخ أو الاسم.'])
       + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.'])
-      + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
-    if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
+      + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'كل كتاب ترسله إلى العمادة تظهر عليه حالته: بانتظار القرار، موافَق عليه، مُعاد، أو مرفوض مع السبب.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
+    if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['افتح كتاب القسم الوارد واختر: موافقة، إعادة للقسم، أو رفض مع السبب.', '«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
     if (r === 'unit') b += S('الطلبات المحوَّلة', ['تظهر عندكم فقط الطلبات التي حوّلتها العمادة إلى شعبتكم.', 'افتح الطلب واضغط «تم الإنجاز»، أو «إرجاع إلى العمادة» مع السبب.']);
     b += S('عام', ['الجرس في الأعلى يعرض الإشعارات.', 'زر «طباعة» داخل أي طلب يخرجه بترويسة رسمية.', 'من «حسابي» يمكنك تغيير كلمة المرور وتنصيب التطبيق كأيقونة.']);
     Modal.open(Modal.head('دليل الاستخدام', h(ROLE_LABEL[r])) + `<div class="modal-b">${b}</div><div class="modal-f"><button class="btn" data-act="close">فهمت</button></div>`);
