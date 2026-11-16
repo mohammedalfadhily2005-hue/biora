@@ -508,3 +508,13 @@ button:hover>.avatar{transform:scale(1.06)}
 .seen.ok{background:var(--g50);color:var(--g700);border-color:#BFDCD2}
 .seen svg.i{width:18px;height:18px}
 .file .rm svg{width:15px;height:15px}
+
+/* v7 — عدّاد المساحة */
+.meter{margin-bottom:14px}
+.meter-h{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;margin-bottom:6px}
+.meter-h b{font-weight:600}
+.meter .track{display:block;height:11px;border-radius:99px;background:var(--g50);overflow:hidden}
+.meter .fill{height:100%;border-radius:99px;transition:width .6s var(--ease)}
+.usage-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.usage-row>div{background:#FAF8F2;border-radius:10px;padding:9px 12px;display:flex;flex-direction:column}
+.usage-row span{font-size:12px;color:var(--ink-3)}

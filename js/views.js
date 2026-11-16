@@ -158,6 +158,7 @@ const App = {
           <div class="sec-head"><h2>اليوم في القسم</h2></div>
           <div class="card list">${[...leave.map(x => [x, 'مجاز', 'violet']), ...abs.map(a => [U[a.user_id], { absent: 'غائب', late: 'متأخر', permit: 'إذن' }[a.kind], a.kind === 'absent' ? 'red' : 'amber'])].filter(x => x[0]).map(([x, l, c]) =>
             `<button class="row" data-act="openStaff" data-id="${x.id}"><span class="avatar">${h(initials(x.name))}</span><span class="mid"><b>${h(x.name)}</b></span><span class="chip ${c}">${l}</span></button>`).join('') || App.empty('الكادر كامل اليوم', 'لا إجازات ولا غيابات مسجّلة.', 'users')}</div>
+          ${App.usageCard()}
           <div class="sec-head"><h2>الكادر حسب اللقب العلمي</h2></div>
           <div class="card pad bars">${byRank.map(([l, n]) => `<div class="bar"><span>${l}</span><span class="track"><span class="fill" style="width:${n / mx * 100}%;display:block"></span></span><b class="num">${n}</b></div>`).join('')}</div>
           ${byType.length ? `<div class="sec-head"><h2>أكثر الطلبات هذا العام</h2></div><div class="card pad bars">${byType.map(([l, n]) => `<div class="bar" style="grid-template-columns:1fr 90px 26px"><span>${l}</span><span class="track"><span class="fill" style="width:${n / mt * 100}%;display:block;background:var(--gold)"></span></span><b class="num">${n}</b></div>`).join('')}</div>` : ''}
@@ -169,6 +170,24 @@ const App = {
       : App.stat('بانتظار الإجراء', pend.length, '--amber', 'mine') + App.stat('كل ما حُوِّل إلينا', R.length, '--ink-3', 'all');
     return hello + `<div class="stats">${stats}</div><div class="sec-head"><h2>بانتظار الإجراء</h2></div>
       <div class="card list">${pend.map(r => App.reqRow(r, 1)).join('') || App.empty('لا يوجد ما ينتظر الإجراء', 'ستظهر هنا الطلبات المحوَّلة من قسم علوم الحياة.', 'check')}</div>`;
+  },
+
+  usageCard() {
+    const u = ST.usage; if (!u) return '';
+    const pf = Math.min(100, u.files_bytes / u.files_limit * 100), pd = u.db_limit && u.db_bytes ? Math.min(100, u.db_bytes / u.db_limit * 100) : 0;
+    const tone = p => p >= 90 ? 'var(--red)' : p >= 70 ? 'var(--amber)' : 'var(--g500)';
+    const mon = today().slice(0, 7), cur = u.months.find(x => x.month === mon) || { files: 0, bytes: 0 };
+    const total = u.months.reduce((a, x) => a + x.bytes, 0), span = u.first_at ? Math.max(1, (Date.now() - new Date(u.first_at)) / (30.4 * 864e5)) : 0;
+    const rate = span ? total / span : 0, left = rate > 0 ? (u.files_limit - u.files_bytes) / rate : null;
+    const est = left == null ? 'لم تُرفع ملفات بعد' : span < 1.5 ? 'التقدير يحتاج شهراً آخر من الاستخدام ليكون دقيقاً' : left >= 24 ? 'بالمعدل الحالي تكفي المساحة أكثر من سنتين' : left >= 12 ? `بالمعدل الحالي تكفي المساحة نحو ${Math.round(left / 12 * 10) / 10} سنة` : `بالمعدل الحالي تكفي المساحة نحو ${Math.max(1, Math.round(left))} شهراً`;
+    const warn = pf >= 90 ? 'المساحة شبه ممتلئة. صدّري الأرشيف وأبلغي المسؤول التقني لتنظيف المرفقات القديمة.' : pf >= 70 ? 'اقتربت المساحة من الامتلاء. يُفضَّل استخدام زر «رابط» للملفات الكبيرة.' : '';
+    const last = u.months.slice(-6), mx = Math.max(1, ...last.map(x => x.bytes));
+    const meter = (l, used, lim, p) => `<div class="meter"><div class="meter-h"><span>${l}</span><b>${sizeH(used)} من ${sizeH(lim)}</b></div><span class="track"><span class="fill" style="width:${Math.max(p, used ? 1.5 : 0)}%;display:block;background:${tone(p)}"></span></span></div>`;
+    return `<div class="sec-head"><h2>مساحة التخزين</h2><span class="chip ${pf >= 90 ? 'red' : pf >= 70 ? 'amber' : 'green'}"><span class="num">${Math.round(pf)}%</span> مستخدم</span></div>
+      <div class="card pad">${meter('الملفات والمرفقات', u.files_bytes, u.files_limit, pf)}${u.db_bytes ? meter('البيانات (الطلبات والكتب)', u.db_bytes, u.db_limit, pd) : ''}
+        <div class="usage-row"><div><span>هذا الشهر</span><b><span class="num">${cur.files}</span> ملف · ${sizeH(cur.bytes)}</b></div><div><span>إجمالي الملفات</span><b class="num">${u.files_count}</b></div></div>
+        <p class="small muted" style="margin-top:10px">${est}.</p>${warn ? `<div class="err" style="margin:10px 0 0">${warn}</div>` : ''}
+        ${last.length > 1 ? `<div class="sub-h" style="margin-top:14px">الرفع الشهري</div><div class="bars">${last.map(x => `<div class="bar" style="grid-template-columns:86px 1fr 62px"><span>${MONTHS[+x.month.slice(5) - 1]}</span><span class="track"><span class="fill" style="width:${x.bytes / mx * 100}%;display:block;background:var(--gold)"></span></span><b class="small">${sizeH(x.bytes)}</b></div>`).join('')}</div>` : ''}</div>`;
   },
 
   /* ───── requests ───── */
@@ -260,7 +279,7 @@ const App = {
   drawFiles() {
     const b = $('#file-list'); if (!b) return;
     b.innerHTML = App._files.map((f, i) => `<div class="att-item">${f.url ? `<img src="${f.url}" alt="">` : `<span class="att-ic">${ic(KIND_ICON[fileKind(f.mime, f.name)])}</span>`}
-      <span class="att-meta"><b>${h(f.name)}</b><span class="num">${f.link ? h(f.link.replace(/^https?:\/\//, '').slice(0, 40)) : fmtSize(f.size)}</span></span>
+      <span class="att-meta"><b>${h(f.name)}</b><span>${f.link ? `<span class="num">${h(f.link.replace(/^https?:\/\//, '').slice(0, 40))}</span>` : sizeH(f.size)}</span></span>
       <button type="button" class="rm" data-act="rmFile" data-i="${i}" aria-label="حذف المرفق">${ic('x')}</button></div>`).join('');
     const d = $('#drop'); if (d) d.classList.toggle('has', App._files.length > 0);
   },

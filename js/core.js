@@ -252,6 +252,7 @@ async function run(btn, fn) {
 const STORE_URL = (LOCAL ? '' : CFG.url) + '/storage/v1/object', BUCKET = 'biora-files';
 const MAX_FILE = 20 * 1024 * 1024, MAX_FILES = 8;
 const fmtSize = b => !b ? '' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' م.ب' : Math.max(1, Math.round(b / 1024)) + ' ك.ب';
+const sizeH = b => { if (!b) return '<bdi><span class="num">0</span></bdi>'; const g = b >= 1073741824, m = b >= 1048576; return `<bdi><span class="num">${g ? +(b / 1073741824).toFixed(2) : m ? (b / 1048576).toFixed(1) : Math.max(1, Math.round(b / 1024))}</span> ${g ? 'غ.ب' : m ? 'م.ب' : 'ك.ب'}</bdi>`; };
 const fileKind = (mime, name) => {
   mime = mime || ''; name = name || '';
   if (mime === 'text/uri-list') return 'link'; if (mime.startsWith('image/')) return 'image';
@@ -261,15 +262,15 @@ const fileKind = (mime, name) => {
   return 'doc';
 };
 const KIND_ICON = { image: 'image', audio: 'mic', video: 'video', pdf: 'file', zip: 'archive', doc: 'file', link: 'link' };
-const fileChip = f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span>${f.size && f.mime !== 'text/uri-list' ? `<i class="fsz num">${fmtSize(f.size)}</i>` : ''}</button>`;
+const fileChip = f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span>${f.size && f.mime !== 'text/uri-list' ? `<i class="fsz">${sizeH(f.size)}</i>` : ''}</button>`;
 const toB64 = blob => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = () => no(new Error('تعذّرت قراءة الملف')); fr.readAsDataURL(blob); });
 async function shrinkImage(f) {
-  if (!/^image\/(jpeg|png|webp)$/.test(f.type) || f.size < 500 * 1024) return f;
+  if (!/^image\/(jpeg|png|webp|bmp)$/.test(f.type) || f.size < 250 * 1024) return f;
   try {
-    const bmp = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
     const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .82));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .72));
     if (blob && blob.size < f.size) return new File([blob], f.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
   } catch {}
   return f;
