@@ -121,7 +121,7 @@ const App = {
   reqRow(r, showOwner) {
     const t = TYPE[r.type] || {}, own = showOwner && r.user_id !== me().id;
     return `<button class="row" data-act="openReq" data-id="${r.id}"><span class="ti">${ic(t.icon)}</span>
-      <span class="mid"><b>${h(typeLabel(r))}${own ? ` — ${h(uname(r.user_id))}` : ''}</b><span>${h(summary(r)) || '&nbsp;'}</span></span>
+      <span class="mid"><b>${h(typeLabel(r))}${own ? ` — ${h(uname(r.user_id))}` : ''}</b><span>${h(summary(r)) || '&nbsp;'}${r.user_id === me().id && App.reqEditable(r) ? ' · لم يُطّلع عليه بعد' : ''}</span></span>
       <span class="end">${statusChip(r)}<span class="date"><span class="num">${h(r.ref)}</span> · ${fmtDate(isoDay(new Date(r.created_at)))}</span></span></button>`;
   },
   empty: (title, sub, icon = 'inbox') => `<div class="empty">${ic(icon)}<b>${title}</b>${sub ? `<div class="small">${sub}</div>` : ''}</div>`,
@@ -222,19 +222,21 @@ const App = {
     return `<div class="field${f.half ? '' : ' full'}">${lab}${inp}</div>`;
   },
   newReq(el) { Modal.closeAll(); App.reqForm(el.dataset.type); },
-  editReq(el) { const r = ST.requests.find(x => x.id === el.dataset.id); Modal.closeAll(); App.reqForm(r.type, r); },
-  reqForm(type, r) {
+  editReq(el) { const r = ST.requests.find(x => x.id === el.dataset.id); Modal.closeAll(); App.reqForm(r.type, r, r.status === 'returned' ? 'resubmit' : 'edit'); },
+  reqEditable: r => V6() && r.user_id === me().id && !r.seen_at && (r.status === 'submitted' || (isHead() && r.status === 'at_dean' && !r.assigned_to)),
+  reqForm(type, r, mode = '') {
     const t = TYPE[type], d = r ? r.data : {};
-    const last = r && [...r.events].reverse().find(e => e.action === 'return');
-    App._files = [];
-    Modal.open(Modal.head(r ? 'تعديل الطلب وإعادة تقديمه' : t.label, r ? `<span class="num">${h(r.ref)}</span>` : (isHead() ? 'يُرسل مباشرة إلى العمادة' : 'يُرسل إلى رئاسة القسم')) +
-      `<form data-submit="submitReq" data-type="${type}" data-id="${r ? r.id : ''}" style="display:contents" novalidate><div class="modal-b">
+    const last = mode === 'resubmit' && [...r.events].reverse().find(e => e.action === 'return');
+    App._files = []; App._rm = [];
+    Modal.open(Modal.head(mode === 'edit' ? 'تعديل الطلب' : r ? 'تعديل الطلب وإعادة تقديمه' : t.label, r ? `<span class="num">${h(r.ref)}</span>` : (isHead() ? 'يُرسل مباشرة إلى العمادة' : 'يُرسل إلى رئاسة القسم')) +
+      `<form data-submit="submitReq" data-type="${type}" data-id="${r ? r.id : ''}" data-mode="${mode}" style="display:contents" novalidate><div class="modal-b">
         ${last ? `<div class="err"><b>سبب الإرجاع:</b> ${h(last.note || '')}</div>` : ''}
         <div class="grid2">${t.f.map((f, i) => App.fieldHTML(f, d[f.k], 'f' + i)).join('')}
           <div class="full small muted" id="days-hint" style="margin:-6px 0 10px"></div>
-          ${App.attachBar()}
+          ${mode === 'edit' && r.files.length ? `<div class="field full"><label>المرفقات الحالية</label><div class="files">${r.files.map(App.oldFile).join('')}</div></div>` : ''}
+          ${App.attachBar(mode === 'edit' ? 'إضافة مرفقات' : undefined)}
         </div><div class="err" hidden id="form-err"></div></div>
-        <div class="modal-f"><button class="btn" type="submit">${ic('send')}${r ? 'إعادة تقديم الطلب' : 'تقديم الطلب'}</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
+        <div class="modal-f"><button class="btn" type="submit">${ic(mode === 'edit' ? 'check' : 'send')}${mode === 'edit' ? 'حفظ التعديل' : r ? 'إعادة تقديم الطلب' : 'تقديم الطلب'}</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
     const o = $('#modals').lastElementChild; App.updateDays($('form', o));
   },
   attachBar: (label = 'المرفقات (اختياري — حتى 8 ملفات، 20 ميغابايت للملف)') => `<div class="field full"><label>${label}</label><div class="attach" id="drop">
@@ -276,12 +278,14 @@ const App = {
       if (v) data[f.k] = v;
     }
     if (data.from && data.to && /^\d{4}-\d\d-\d\d$/.test(data.to) && data.to < data.from) { err.textContent = 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية'; err.hidden = false; return; }
-    const id = form.dataset.id;
+    const id = form.dataset.id, mode = form.dataset.mode;
     run($('button[type=submit]', form), async () => {
-      await api(id ? 'resubmit' : 'submit_request', { id, type: t.k, data, files: await uploadFiles(App._files) });
+      const files = await uploadFiles(App._files);
+      if (mode === 'edit') await api('edit_request', { id, data, files, remove_files: App._rm });
+      else await api(id ? 'resubmit' : 'submit_request', { id, type: t.k, data, files });
       Modal.closeAll(); App.render(true);
-      toast(id ? 'أُعيد تقديم الطلب' : (isHead() ? 'أُرسل الطلب إلى العمادة' : 'قُدِّم الطلب إلى رئاسة القسم'));
-      const r = ST.requests[0]; if (!id && r) App.openReq({ dataset: { id: r.id } });
+      toast(mode === 'edit' ? 'حُفظ تعديل الطلب' : id ? 'أُعيد تقديم الطلب' : (isHead() ? 'أُرسل الطلب إلى العمادة' : 'قُدِّم الطلب إلى رئاسة القسم'));
+      const r = mode === 'edit' ? ST.requests.find(x => x.id === id) : ST.requests[0]; if ((mode === 'edit' || !id) && r) App.openReq({ dataset: { id: r.id } });
     });
   },
   openReq(el) {
@@ -305,13 +309,19 @@ const App = {
       acts = B('complete', 'تم الإنجاز', '', 'check') + B('back', 'إرجاع إلى العمادة', 'ghost', 'undo');
     else if (r.user_id === m.id && r.status === 'returned')
       acts = `<button class="btn" data-act="editReq" data-id="${r.id}">${ic('edit')}تعديل وإعادة تقديم</button>` + B('withdraw', 'سحب الطلب', 'danger', 'x');
+    else if (App.reqEditable(r)) acts = `<button class="btn" data-act="editReq" data-id="${r.id}">${ic('edit')}تعديل</button>` + (r.events.every(e => ['submit', 'edit'].includes(e.action)) ? B('delete', 'حذف الطلب', 'danger', 'trash') : B('withdraw', 'سحب الطلب', 'danger', 'x'));
     else if (r.user_id === m.id && r.status === 'submitted') acts = B('withdraw', 'سحب الطلب', 'danger', 'x');
+    else if (V6() && m.role === 'head' && r.user_id !== m.id && r.status === 'at_dean' && !r.seen_at && !r.assigned_to) acts = B('recall', 'سحب التحويل من العمادة', 'ghost', 'undo');
+    const live = ['submitted', 'returned_dept', 'at_dean', 'at_unit'].includes(r.status), mineTurn = needsMe(r) && r.user_id !== m.id;
+    const seen = !V6() || !live || mineTurn ? '' : r.seen_at ? `<div class="seen ok">${ic('eye')}<span>اطّلع عليه ${h(upos(r.seen_by))} · ${fmtDT(r.seen_at)}${r.user_id === m.id ? ' — أُقفل التعديل والحذف' : ''}</span></div>`
+      : `<div class="seen">${ic('clock')}<span>لم يُطّلع عليه بعد${App.reqEditable(r) ? ' — يمكنك تعديله أو حذفه' : ''}</span></div>`;
     Modal.open(Modal.head(h(typeLabel(r)), `رقم الطلب <span class="num">${h(r.ref)}</span> · ${fmtDT(r.created_at)}`) + `<div class="modal-b">
       <div class="who"><span class="avatar lg">${h(initials(o.name))}</span><div style="flex:1;min-width:0"><b>${h(o.name || '—')}</b><span>${h(o.position || RANK_LABEL[o.rank] || '')}</span></div>${statusChip(r)}</div>
-      <dl class="dl">${rows}${days}</dl>
+      ${seen}<dl class="dl">${rows}${days}</dl>
       ${r.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${r.files.map(fileChip).join('')}</div>` : ''}
       <div class="sub-h">مسار الطلب</div><div class="strand">${evs}</div></div>
       <div class="modal-f">${acts}<span class="sp"></span>${B('note', 'ملاحظة', 'ghost', 'note')}<button class="btn ghost" data-act="printReq" data-id="${r.id}">${ic('printer')}طباعة</button></div>`);
+    if (V6() && mineTurn && !r.seen_at) api('seen_request', { id: r.id }).then(() => { App.dirty = true; }).catch(() => {});
   },
   getFile(el) { run(el, () => openFile(el.dataset.id)); },
   reqAct(el) {
@@ -320,21 +330,23 @@ const App = {
     const T = { approve: ['تأكيد الموافقة والإنجاز', 'سيُبلَّغ مقدم الطلب بإنجاز طلبه.', 'تأكيد الموافقة'], forward: ['تحويل الطلب إلى العمادة', 'سيظهر الطلب لدى عمادة الكلية للبتّ به.', 'تحويل إلى العمادة'],
       return: ['إرجاع الطلب', 'اكتب ما المطلوب تعديله أو استكماله.', 'إرجاع الطلب'], reject: ['رفض الطلب', 'اكتب سبب الرفض ليطّلع عليه مقدم الطلب.', 'تأكيد الرفض'],
       assign: ['تحويل إلى جهة مختصة', 'اختر الشعبة أو المعاون الذي سيتولى الطلب.', 'تحويل'], complete: ['تأكيد إنجاز الطلب', 'سيُبلَّغ مقدم الطلب والقسم بالإنجاز.', 'تم الإنجاز'],
-      back: ['إرجاع إلى العمادة', 'اكتب سبب الإرجاع.', 'إرجاع'], withdraw: ['سحب الطلب', 'سيُلغى الطلب ولن يُنظر فيه.', 'سحب الطلب'], note: ['إضافة ملاحظة', 'تظهر الملاحظة في مسار الطلب لكل من يحق له رؤيته.', 'إضافة'] }[a];
+      back: ['إرجاع إلى العمادة', 'اكتب سبب الإرجاع.', 'إرجاع'], withdraw: ['سحب الطلب', 'سيُلغى الطلب ولن يُنظر فيه.', 'سحب الطلب'], delete: ['حذف الطلب نهائياً', 'لم يطّلع أحد على الطلب بعد، لذلك سيُحذف كأنه لم يُقدَّم.', 'حذف الطلب'], recall: ['سحب التحويل من العمادة', 'لم تطّلع العمادة على الطلب بعد، وسيعود إليك للبتّ به.', 'سحب التحويل'], note: ['إضافة ملاحظة', 'تظهر الملاحظة في مسار الطلب لكل من يحق له رؤيته.', 'إضافة'] }[a];
     const targets = a === 'assign' ? ST.users.filter(x => ['unit', 'dean_asst'].includes(x.role) && x.active && x.id !== me().id) : [];
     Modal.open(Modal.head(T[0], `<span class="num">${h(r.ref)}</span>`) + `<form data-submit="doReqAct" data-id="${id}" data-a="${a}" style="display:contents"><div class="modal-b"><p class="muted" style="margin-bottom:14px">${T[1]}</p>
       ${a === 'assign' ? `<div class="field"><label for="ato">الجهة <span class="req">*</span></label><select class="input" id="ato" name="to" required><option value="">اختر…</option>${targets.map(x => `<option value="${x.id}">${h(x.position || x.name)}</option>`).join('')}</select></div>` : ''}
-      ${a === 'withdraw' ? '' : `<div class="field"><label for="anote">${need ? (a === 'note' ? 'الملاحظة' : 'السبب') + ' <span class="req">*</span>' : 'ملاحظة (اختياري)'}</label><textarea class="input" id="anote" name="note" ${need ? 'required' : ''} autofocus maxlength="1000"></textarea></div>`}</div>
-      <div class="modal-f"><button class="btn${['reject', 'withdraw'].includes(a) ? ' danger' : ''}" type="submit">${T[2]}</button><button class="btn ghost" type="button" data-act="close">تراجع</button></div></form>`, { narrow: 1 });
+      ${['withdraw', 'delete'].includes(a) ? '' : `<div class="field"><label for="anote">${need ? (a === 'note' ? 'الملاحظة' : 'السبب') + ' <span class="req">*</span>' : 'ملاحظة (اختياري)'}</label><textarea class="input" id="anote" name="note" ${need ? 'required' : ''} autofocus maxlength="1000"></textarea></div>`}</div>
+      <div class="modal-f"><button class="btn${['reject', 'withdraw', 'delete'].includes(a) ? ' danger' : ''}" type="submit">${T[2]}</button><button class="btn ghost" type="button" data-act="close">تراجع</button></div></form>`, { narrow: 1 });
   },
   doReqAct(form) {
     const { id, a } = form.dataset, note = form.note ? form.note.value.trim() : '';
     run($('button[type=submit]', form), async () => {
       if (a === 'withdraw') await api('withdraw', { id });
+      else if (a === 'delete') await api('delete_request', { id });
+      else if (a === 'recall') await api('recall', { id, note });
       else if (a === 'note') await api('comment', { id, note });
       else await api('act', { id, action: a, note, to: form.to ? form.to.value : undefined });
       Modal.closeAll(); App.render(true);
-      toast({ approve: 'تمت الموافقة وأُنجز الطلب', forward: 'حُوِّل الطلب إلى العمادة', return: 'أُرجع الطلب', reject: 'رُفض الطلب', assign: 'حُوِّل الطلب', complete: 'أُنجز الطلب', back: 'أُرجع إلى العمادة', withdraw: 'سُحب الطلب', note: 'أُضيفت الملاحظة' }[a]);
+      toast({ approve: 'تمت الموافقة وأُنجز الطلب', forward: 'حُوِّل الطلب إلى العمادة', return: 'أُرجع الطلب', reject: 'رُفض الطلب', assign: 'حُوِّل الطلب', complete: 'أُنجز الطلب', back: 'أُرجع إلى العمادة', withdraw: 'سُحب الطلب', delete: 'حُذف الطلب', recall: 'سُحب التحويل وعاد الطلب إليك', note: 'أُضيفت الملاحظة' }[a]);
       if (a === 'note') App.openReq({ dataset: { id } });
     });
   },
@@ -496,87 +508,133 @@ const App = {
   /* ───── letters ───── */
   v_letters() {
     const m = me(), u = App.ui, inbox = ST.letters.filter(l => l.from_id !== m.id), out = ST.letters.filter(l => l.from_id === m.id);
-    if (isFac()) u.letTab = 'in';
     const L = u.letTab === 'in' ? inbox : out, unread = inbox.filter(l => l.rcpt.some(c => c.user_id === m.id && !c.read_at)).length;
-    const row = l => { const un = l.from_id !== m.id && l.rcpt.some(c => c.user_id === m.id && !c.read_at);
-      return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic(l.kind === 'circular' ? 'users' : 'mail')}</span><span class="mid"><b>${h(l.subject)}</b><span>${u.letTab === 'in' ? 'من: ' + h(upos(l.from_id)) : 'إلى: ' + h(l.to_label || '')}</span></span>
-        <span class="end">${l.kind === 'circular' ? '<span class="chip green plain">تعميم</span>' : App.decChip(l)}<span class="date"><span class="num">${h(l.ref)}</span> · ${ago(l.created_at)}</span></span></button>`; };
-    return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px">${isFac() ? '' : `<div class="seg"><button class="${u.letTab === 'in' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="in">الوارد<span class="n num">${unread || inbox.length}</span></button><button class="${u.letTab === 'out' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="out">الصادر<span class="n num">${out.length}</span></button></div>`}
-      <span style="flex:1"></span>${isFac() ? '' : `<button class="btn ghost" data-act="compose" data-scan="1">${ic('camera')}رفع كتاب جاهز</button><button class="btn" data-act="compose">${ic('plus')}كتاب جديد</button>`}</div>
-      <div class="card list">${L.map(row).join('') || App.empty(u.letTab === 'in' ? 'لا توجد كتب واردة' : 'لم ترسل كتباً بعد', isFac() ? 'ستظهر هنا تعاميم رئاسة القسم.' : '', 'mail')}</div>`;
+    const row = l => { const un = l.from_id !== m.id && l.rcpt.some(c => c.user_id === m.id && !c.read_at), pr = (l.meta || {}).priority;
+      return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic(l.kind === 'circular' ? 'users' : 'mail')}</span><span class="mid"><b>${h(l.subject)}</b><span>${u.letTab === 'in' ? 'من: ' + h(upos(l.from_id)) : 'إلى: ' + h(l.to_label || '')}${V6() && u.letTab === 'out' && l.rcpt.length && l.rcpt.every(c => !c.read_at) ? ' · لم يُطّلع عليه بعد' : ''}</span></span>
+        <span class="end"><span style="display:flex;gap:6px">${App.PRI[pr] ? `<span class="chip red plain">${App.PRI[pr]}</span>` : ''}${l.kind === 'circular' ? '<span class="chip green plain">تعميم</span>' : App.decChip(l)}</span><span class="date"><span class="num">${h(l.ref)}</span> · ${ago(l.created_at)}</span></span></button>`; };
+    return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px"><div class="seg"><button class="${u.letTab === 'in' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="in">الوارد<span class="n num">${unread || inbox.length}</span></button><button class="${u.letTab === 'out' ? 'on' : ''}" data-act="setTab" data-key="letTab" data-val="out">الصادر<span class="n num">${out.length}</span></button></div>
+      <span style="flex:1"></span>${isFac() && !V6() ? '' : `<button class="btn ghost" data-act="compose" data-scan="1">${ic('camera')}رفع كتاب جاهز</button><button class="btn" data-act="compose">${ic('plus')}كتاب جديد</button>`}</div>
+      <div class="card list">${L.map(row).join('') || App.empty(u.letTab === 'in' ? 'لا توجد كتب واردة' : 'لم ترسل كتباً بعد', isFac() ? (u.letTab === 'in' ? 'ستظهر هنا تعاميم رئاسة القسم وردودها.' : 'اضغط «كتاب جديد» لمخاطبة رئاسة القسم.') : '', 'mail')}</div>`;
   },
-  DEC: { accept: ['موافقة', 'موافَق عليه', 'green'], reject: ['رفض', 'مرفوض', 'red'], return: ['إعادة', 'مُعاد إلى القسم', 'amber'] },
-  isDecision: l => /^قرار العمادة: /.test(l.subject) && U[l.from_id] && ['dean', 'dean_asst'].includes(U[l.from_id].role),
+  PRI: { urgent: 'عاجل', very_urgent: 'عاجل جداً' },
+  DEC: { accept: ['موافقة', 'موافَق عليه', 'green'], reject: ['رفض', 'مرفوض', 'red'], return: ['إعادة', 'مُعاد للاستكمال', 'amber'] },
+  DEC_RX: /^قرار (العمادة|رئاسة القسم): /,
+  isDecision: l => App.DEC_RX.test(l.subject) && U[l.from_id] && ['dean', 'dean_asst', 'head'].includes(U[l.from_id].role),
   decision(l) {
     const r = ST.letters.filter(x => x.parent_id === l.id && App.isDecision(x)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
     if (!r) return null;
-    const k = Object.keys(App.DEC).find(k => r.subject.startsWith('قرار العمادة: ' + App.DEC[k][0]));
-    return k ? { k, letter: r } : null;
+    const rest = r.subject.replace(App.DEC_RX, ''), k = Object.keys(App.DEC).find(k => rest.startsWith(App.DEC[k][0]));
+    return k ? { k, letter: r, who: r.subject.match(App.DEC_RX)[1] } : null;
   },
-  needsDecision: l => l.kind === 'letter' && !l.parent_id && U[l.from_id] && U[l.from_id].role === 'head' && (isDean() ? l.rcpt.some(c => c.user_id === me().id) : /عماد|عميد|معاون/.test(l.to_label || '')),
+  /* من يبتّ بالكتاب: العمادة لكتب رئاسة القسم، ورئاسة القسم لكتب التدريسيين */
+  decider(l) {
+    const s = U[l.from_id]; if (l.kind !== 'letter' || l.parent_id || !s) return null;
+    if (s.role === 'head') return (isDean() ? l.rcpt.some(c => c.user_id === me().id) : /عماد|عميد|معاون/.test(l.to_label || '')) ? 'العمادة' : null;
+    if (s.role === 'faculty') return 'رئاسة القسم';
+    return null;
+  },
+  needsDecision: l => !!App.decider(l),
+  canDecide(l) { const d = App.decider(l); return l.from_id !== me().id && l.rcpt.some(c => c.user_id === me().id) && !App.decision(l) && ((d === 'العمادة' && isDean()) || (d === 'رئاسة القسم' && isHead())); },
   decChip(l) {
-    if (App.isDecision(l)) return '<span class="chip blue plain">قرار العمادة</span>';
+    if (App.isDecision(l)) return '<span class="chip blue plain">قرار</span>';
     const d = App.decision(l);
     if (d) return `<span class="chip ${App.DEC[d.k][2]}">${App.DEC[d.k][1]}</span>`;
-    return App.needsDecision(l) ? '<span class="chip amber">بانتظار قرار العمادة</span>' : '';
+    const w = App.decider(l); return w ? `<span class="chip amber">بانتظار قرار ${w}</span>` : '';
   },
   decide(el) {
     const l = ST.letters.find(x => x.id === el.dataset.id), k = el.dataset.d, need = k !== 'accept';
-    const T = { accept: ['الموافقة على الكتاب', 'ستُبلَّغ رئاسة القسم بموافقة العمادة.', 'تأكيد الموافقة'], reject: ['رفض الكتاب', 'اكتب سبب الرفض ليصل إلى رئاسة القسم.', 'تأكيد الرفض'], return: ['إعادة الكتاب إلى القسم', 'اكتب المطلوب استكماله أو تعديله.', 'إعادة الكتاب'] }[k];
+    const T = { accept: ['الموافقة على الكتاب', 'سيُبلَّغ مُرسِل الكتاب بالموافقة.', 'تأكيد الموافقة'], reject: ['رفض الكتاب', 'اكتب سبب الرفض ليطّلع عليه مُرسِل الكتاب.', 'تأكيد الرفض'], return: ['إعادة الكتاب للاستكمال', 'اكتب المطلوب استكماله أو تعديله.', 'إعادة الكتاب'] }[k];
     Modal.open(Modal.head(T[0], h(l.subject)) + `<form data-submit="doDecide" data-id="${l.id}" data-d="${k}" style="display:contents"><div class="modal-b"><p class="muted" style="margin-bottom:14px">${T[1]}</p>
-      <div class="field"><label for="dn">${need ? 'السبب <span class="req">*</span>' : 'ملاحظة (اختياري)'}</label><textarea class="input" id="dn" name="note" ${need ? 'required' : ''} autofocus maxlength="1500"></textarea></div></div>
+      <div class="field"><label for="dn">${need ? 'السبب <span class="req">*</span>' : 'هامش / ملاحظة (اختياري)'}</label><textarea class="input" id="dn" name="note" ${need ? 'required' : ''} autofocus maxlength="1500"></textarea></div></div>
       <div class="modal-f"><button class="btn${k === 'reject' ? ' danger' : ''}" type="submit">${T[2]}</button><button class="btn ghost" type="button" data-act="close">تراجع</button></div></form>`, { narrow: 1 });
   },
   doDecide(form) {
-    const l = ST.letters.find(x => x.id === form.dataset.id), k = form.dataset.d, note = form.note.value.trim();
-    const ids = [l.from_id, ...ST.users.filter(x => ['dean', 'dean_asst'].includes(x.role) && x.active && x.id !== me().id).map(x => x.id)];
+    const l = ST.letters.find(x => x.id === form.dataset.id), k = form.dataset.d, note = form.note.value.trim(), who = isDean() ? 'العمادة' : 'رئاسة القسم';
+    const ids = isDean() ? [l.from_id, ...ST.users.filter(x => ['dean', 'dean_asst'].includes(x.role) && x.active && x.id !== me().id).map(x => x.id)] : [l.from_id];
     run($('button[type=submit]', form), async () => {
-      await api('send_letter', { to: 'ids', ids, subject: `قرار العمادة: ${App.DEC[k][0]} — ${l.subject}`.slice(0, 200), body: note || { accept: 'تمت الموافقة على الكتاب.', reject: '', return: '' }[k], parent_id: l.id });
-      Modal.closeAll(); App.render(true); toast({ accept: 'سُجّلت الموافقة وأُبلغ القسم', reject: 'سُجّل الرفض وأُبلغ القسم', return: 'أُعيد الكتاب إلى القسم' }[k]);
+      await api('send_letter', { to: 'ids', ids, subject: `قرار ${who}: ${App.DEC[k][0]} — ${l.subject}`.slice(0, 200), body: note || { accept: 'تمت الموافقة على الكتاب.', reject: '', return: '' }[k], parent_id: l.id });
+      Modal.closeAll(); App.render(true); toast({ accept: 'سُجّلت الموافقة وأُبلغ المُرسِل', reject: 'سُجّل الرفض وأُبلغ المُرسِل', return: 'أُعيد الكتاب للاستكمال' }[k]);
     });
   },
+  letterOpenToEdit: l => V6() && l.from_id === me().id && l.rcpt.length > 0 && l.rcpt.every(c => !c.read_at) && !ST.letters.some(x => x.parent_id === l.id),
   openLetter(el) {
-    const l = ST.letters.find(x => x.id === el.dataset.id), m = me(), mineL = l.from_id === m.id;
+    const l = ST.letters.find(x => x.id === el.dataset.id); if (!l) return toast('الكتاب غير متاح', true);
+    const m = me(), mineL = l.from_id === m.id, meta = l.meta || {}, canEd = App.letterOpenToEdit(l), canDec = App.canDecide(l);
     const read = l.rcpt.filter(c => c.read_at).length, par = l.parent_id && ST.letters.find(x => x.id === l.parent_id);
-    Modal.open(Modal.head(h(l.subject), `العدد <span class="num">${h(l.ref)}</span> · ${fmtDT(l.created_at)}`) + `<div class="modal-b">
+    const dec = (() => { const d = App.decision(l); if (d) return `<div class="decision ${App.DEC[d.k][2]}"><b>قرار ${d.who}: ${App.DEC[d.k][1]}</b><span>${h(upos(d.letter.from_id))} · ${fmtDT(d.letter.created_at)}</span>${d.letter.body ? `<p>${h(d.letter.body)}</p>` : ''}</div>`; const w = App.decider(l); return w ? `<div class="decision amber"><b>بانتظار قرار ${w}</b><span>لم يُبتّ بهذا الكتاب بعد.</span></div>` : ''; })();
+    Modal.open(Modal.head(h(l.subject), `العدد <span class="num">${h(l.ref)}</span> · ${fmtDT(l.created_at)}${l.edited_at ? ' · عُدِّل' : ''}`) + `<div class="modal-b">
+      ${canEd ? `<div class="seen">${ic('clock')}<span>لم يطّلع عليه أحد بعد — يمكنك تعديله أو حذفه. بعد الاطلاع يُقفل الكتاب.</span></div>` : ''}
       <dl class="dl"><div><dt>من</dt><dd>${h(upos(l.from_id))}${U[l.from_id] && U[l.from_id].position ? ' — ' + h(uname(l.from_id)) : ''}</dd></div><div><dt>إلى</dt><dd>${h(l.to_label || '')}</dd></div>
+      ${App.PRI[meta.priority] ? `<div class="full"><dt>درجة الاستعجال</dt><dd><span class="chip red plain">${App.PRI[meta.priority]}</span></dd></div>` : ''}
+      ${meta.paper_no ? `<div class="full"><dt>رقم الكتاب الورقي وتاريخه</dt><dd><span class="num">${h(meta.paper_no)}</span>${meta.paper_date ? ' في ' + plainDate(meta.paper_date) : ''}</dd></div>` : ''}
       <div class="full"><dt>نص الكتاب</dt><dd>${h(l.body) || '—'}</dd></div></dl>
-      ${(() => { const d = App.decision(l); if (d) return `<div class="decision ${App.DEC[d.k][2]}"><b>قرار العمادة: ${App.DEC[d.k][1]}</b><span>${h(upos(d.letter.from_id))} · ${fmtDT(d.letter.created_at)}</span>${d.letter.body ? `<p>${h(d.letter.body)}</p>` : ''}</div>`; return App.needsDecision(l) ? '<div class="decision amber"><b>بانتظار قرار العمادة</b><span>لم يُبتّ بهذا الكتاب بعد.</span></div>' : ''; })()}
+      ${dec}
       ${par ? `<p class="small muted" style="margin-top:10px">رداً على / إحالةً لـ: ${h(par.subject)} (<span class="num">${h(par.ref)}</span>)</p>` : ''}
       ${l.files.length ? `<div class="sub-h">المرفقات</div><div class="files">${l.files.map(fileChip).join('')}</div>` : ''}
-      ${mineL ? `<div class="sub-h">الاطلاع (<span class="num">${read}</span> من <span class="num">${l.rcpt.length}</span>)</div><div class="card list" style="max-height:220px;overflow:auto">${l.rcpt.map(c => `<div class="row" style="padding:9px 14px"><span class="mid"><b>${h(upos(c.user_id))}</b></span><span class="chip ${c.read_at ? 'green' : 'gray'}">${c.read_at ? 'اطّلع' : 'لم يطّلع'}</span></div>`).join('')}</div>` : ''}</div>
-      <div class="modal-f">${isDean() && !mineL && App.needsDecision(l) && !App.decision(l) ? `<button class="btn" data-act="decide" data-d="accept" data-id="${l.id}">${ic('check')}موافقة</button><button class="btn ghost" data-act="decide" data-d="return" data-id="${l.id}">${ic('undo')}إعادة للقسم</button><button class="btn danger" data-act="decide" data-d="reject" data-id="${l.id}">${ic('x')}رفض</button>` : ''}
-        ${!mineL && !isFac() ? `<button class="btn ${isDean() && App.needsDecision(l) && !App.decision(l) ? 'ghost' : ''}" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
+      ${mineL ? `<div class="sub-h">الاطلاع (<span class="num">${read}</span> من <span class="num">${l.rcpt.length}</span>)</div><div class="card list" style="max-height:220px;overflow:auto">${l.rcpt.map(c => `<div class="row" style="padding:9px 14px"><span class="mid"><b>${h(upos(c.user_id))}</b>${c.read_at ? `<span>${plainDT(c.read_at)}</span>` : ''}</span><span class="chip ${c.read_at ? 'green' : 'gray'}">${c.read_at ? 'اطّلع' : 'لم يطّلع'}</span></div>`).join('')}</div>` : ''}</div>
+      <div class="modal-f">${canDec ? `<button class="btn" data-act="decide" data-d="accept" data-id="${l.id}">${ic('check')}موافقة</button><button class="btn ghost" data-act="decide" data-d="return" data-id="${l.id}">${ic('undo')}إعادة للاستكمال</button><button class="btn danger" data-act="decide" data-d="reject" data-id="${l.id}">${ic('x')}رفض</button>` : ''}
+        ${canEd ? `<button class="btn" data-act="compose" data-edit="${l.id}">${ic('edit')}تعديل</button><button class="btn danger" data-act="delLetter" data-id="${l.id}">${ic('trash')}حذف</button>` : ''}
+        ${!mineL && (!isFac() || (U[l.from_id] && U[l.from_id].role === 'head' && l.kind !== 'circular')) ? `<button class="btn ${canDec ? 'ghost' : ''}" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
         ${isHead() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="staff">${ic('users')}تعميم على الكادر</button>` : ''}
+        ${isHead() && !mineL && U[l.from_id] && U[l.from_id].role === 'faculty' ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="deanery">${ic('share')}رفع إلى العمادة</button>` : ''}
         ${isDean() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="units">${ic('share')}إحالة إلى الشعب</button>` : ''}
-        <span class="sp"></span><button class="btn ghost" data-act="close">إغلاق</button></div>`);
+        <span class="sp"></span><button class="btn ghost" data-act="printLetter" data-id="${l.id}">${ic('printer')}طباعة</button></div>`);
     if (!mineL && l.rcpt.some(c => c.user_id === m.id && !c.read_at)) api('read_letter', { id: l.id }).then(() => { App.dirty = true; }).catch(() => {});
   },
-  compose(el) {
-    const m = me(), rep = el.dataset.reply && ST.letters.find(x => x.id === el.dataset.reply), fwd = el.dataset.fwd && ST.letters.find(x => x.id === el.dataset.fwd), scan = !!el.dataset.scan;
-    const opts = isHead() ? [['deanery', 'عمادة الكلية'], ['staff', 'تعميم على كل الكادر التدريسي'], ['ids', 'تدريسيون أو جهات محددة…']]
-      : isDean() ? [['head', 'رئاسة قسم علوم الحياة'], ['units', 'كل شعب العمادة'], ['ids', 'جهات محددة…']] : [['deanery', 'عمادة الكلية']];
-    const pre = fwd ? el.dataset.to : rep ? 'ids' : opts[0][0];
-    const cand = ST.users.filter(x => x.active && x.id !== m.id && (isHead() || (isDean() && x.role !== 'faculty') || (isUnit() && ['dean', 'dean_asst'].includes(x.role))));
-    App._files = []; Modal.closeAll();
-    Modal.open(Modal.head(rep ? 'رد على كتاب' : fwd ? 'إحالة كتاب' : scan ? 'رفع كتاب جاهز' : 'كتاب جديد', (rep || fwd) ? h((rep || fwd).subject) : scan ? 'صوّر الكتاب الموقَّع أو ارفع ملفه، واكتب موضوعه فقط' : '') + `<form data-submit="sendLetter" data-parent="${(rep || fwd || {}).id || ''}" style="display:contents"><div class="modal-b">
-      <div class="field"><label for="lt">إلى <span class="req">*</span></label><select class="input" id="lt" name="to" data-toggle-pick>${opts.map(([k, l]) => `<option value="${k}"${pre === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field" id="pick-box"${pre === 'ids' ? '' : ' hidden'}><label>اختر المستلمين</label><div class="pick">${cand.map(x => `<label class="check"><input type="checkbox" name="ids" value="${x.id}"${rep && rep.from_id === x.id ? ' checked' : ''}> ${h(x.position ? x.position + (x.role === 'faculty' || x.role === 'head' ? '' : '') : x.name)}${x.position && x.role !== 'unit' ? ' — ' + h(x.name) : ''}</label>`).join('')}</div></div>
-      <div class="field"><label for="ls">الموضوع <span class="req">*</span></label><input class="input" id="ls" name="subject" required maxlength="200" value="${h(rep ? 'رد: ' + rep.subject : fwd ? fwd.subject : '')}"></div>
-      ${scan ? App.attachBar('صورة الكتاب أو ملفه') : ''}
-      <div class="field"><label for="lb">${scan ? 'ملاحظة (اختياري)' : 'نص الكتاب'}</label><textarea class="input" id="lb" name="body" style="min-height:${scan ? 80 : 150}px" maxlength="6000"${scan ? '' : ' autofocus'}>${h(fwd ? `\n\n— نص الكتاب المُحال (${fwd.ref}) —\n${fwd.body}` : '')}</textarea></div>
-      ${scan ? '' : App.attachBar()}</div>
-      <div class="modal-f"><button class="btn" type="submit">${ic('send')}إرسال</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
-    const o = $('#modals').lastElementChild;
-    $('[data-toggle-pick]', o).addEventListener('change', e => { $('#pick-box', o).hidden = e.target.value !== 'ids'; });
+  delLetter(el) {
+    const l = ST.letters.find(x => x.id === el.dataset.id);
+    App.confirm('حذف الكتاب', `سيُحذف الكتاب «${h(l.subject)}» نهائياً ولن يظهر عند المُرسَل إليهم.`, 'حذف الكتاب', async () => { await api('delete_letter', { id: l.id }); Modal.closeAll(); App.render(true); toast('حُذف الكتاب'); }, true);
   },
+  printLetter(el) {
+    const l = ST.letters.find(x => x.id === el.dataset.id), s = ST.settings, meta = l.meta || {}, f = U[l.from_id] || {}, d = App.decision(l);
+    $('#print').innerHTML = `<div class="p-head"><div>${h(s.ministry)}<br>${h(s.university || '')}<br>${h(s.college)}<br>${['faculty', 'head'].includes(f.role) ? h(s.department) : 'عمادة الكلية'}</div>
+      <div class="mid"><div class="mk">BIORA</div><div style="font-size:10pt;font-weight:400">نظام المعاملات الإلكتروني</div></div>
+      <div style="text-align:left">العدد: <span class="num">${h(meta.paper_no || l.ref)}</span><br>التاريخ: ${plainDate(meta.paper_date || isoDay(new Date(l.created_at)))}${App.PRI[meta.priority] ? `<br><b>${App.PRI[meta.priority]}</b>` : ''}</div></div>
+      <p style="margin:18px 0 4px"><b>إلى / ${h(l.to_label || '')}</b></p><div class="p-title" style="text-align:right;font-size:14.5pt">م / ${h(l.subject)}</div>
+      <p>تحية طيبة ...</p><p style="white-space:pre-wrap;text-align:justify;min-height:120px">${h(l.body) || ''}</p><p style="text-align:center;margin-top:18px">... مع التقدير</p>
+      ${l.files.length ? `<p class="p-sub">المرفقات: ${l.files.length}</p><p style="font-size:11pt">${l.files.map(x => h(x.name)).join(' ، ')}</p>` : ''}
+      <div class="p-sign"><div></div><div>${h(f.name || '')}<br>${h(f.position || RANK_LABEL[f.rank] || '')}</div></div>
+      ${d ? `<div class="p-sub" style="margin-top:22px">قرار ${d.who}: ${App.DEC[d.k][1]}</div><p style="font-size:12pt">${h(upos(d.letter.from_id))} · ${plainDT(d.letter.created_at)}${d.letter.body ? '<br>' + h(d.letter.body) : ''}</p>` : ''}
+      <div class="p-foot"><span>مستخرج من نظام BIORA · الرقم الإلكتروني ${h(l.ref)}</span><span>تاريخ الطباعة: ${plainDT(new Date())}</span></div>`;
+    window.print();
+  },
+  compose(el) {
+    const m = me(), by = k => el.dataset[k] && ST.letters.find(x => x.id === el.dataset[k]);
+    const rep = by('reply'), fwd = by('fwd'), ed = by('edit'), scan = !!el.dataset.scan, src = ed || {}, meta = src.meta || {};
+    const opts = isHead() ? [['deanery', 'عمادة الكلية'], ['staff', 'تعميم على كل الكادر التدريسي'], ['ids', 'تدريسيون أو جهات محددة…']]
+      : isDean() ? [['head', 'رئاسة قسم علوم الحياة'], ['units', 'كل شعب العمادة'], ['ids', 'جهات محددة…']] : isFac() ? [['head', 'رئاسة قسم علوم الحياة']] : [['deanery', 'عمادة الكلية']];
+    const pre = fwd ? el.dataset.to : rep ? (isFac() ? 'head' : 'ids') : opts[0][0];
+    const cand = isFac() ? [] : ST.users.filter(x => x.active && x.id !== m.id && (isHead() || (isDean() && x.role !== 'faculty') || (isUnit() && ['dean', 'dean_asst'].includes(x.role))));
+    App._files = []; App._rm = []; Modal.closeAll();
+    const body = ed ? ed.body : fwd ? `\n\n— نص الكتاب المُحال (${fwd.ref}) —\n${fwd.body}` : '';
+    Modal.open(Modal.head(ed ? 'تعديل الكتاب' : rep ? 'رد على كتاب' : fwd ? 'إحالة كتاب' : scan ? 'رفع كتاب جاهز' : 'كتاب جديد', ed ? `<span class="num">${h(ed.ref)}</span>` : (rep || fwd) ? h((rep || fwd).subject) : scan ? 'صوّر الكتاب الموقَّع أو ارفع ملفه، واكتب موضوعه فقط' : '') + `<form data-submit="sendLetter" data-parent="${(rep || fwd || {}).id || ''}" data-edit="${ed ? ed.id : ''}" data-scan="${scan ? 1 : ''}" style="display:contents"><div class="modal-b">
+      ${ed ? `<div class="field"><label>إلى</label><input class="input" value="${h(ed.to_label || '')}" disabled></div>` : `<div class="field"><label for="lt">إلى <span class="req">*</span></label><select class="input" id="lt" name="to" data-toggle-pick>${opts.map(([k, l]) => `<option value="${k}"${pre === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field" id="pick-box"${pre === 'ids' ? '' : ' hidden'}><label>اختر المستلمين</label><div class="pick">${cand.map(x => `<label class="check"><input type="checkbox" name="ids" value="${x.id}"${rep && rep.from_id === x.id ? ' checked' : ''}> ${h(x.position || x.name)}${x.position && x.role !== 'unit' ? ' — ' + h(x.name) : ''}</label>`).join('')}</div></div>`}
+      <div class="field"><label for="ls">الموضوع <span class="req">*</span></label><input class="input" id="ls" name="subject" required maxlength="200" value="${h(ed ? ed.subject : rep ? 'رد: ' + rep.subject : fwd ? fwd.subject : '')}"></div>
+      <div class="grid2"${V6() ? '' : ' hidden'}><div class="field"><label for="lpr">درجة الاستعجال</label><select class="input" id="lpr" name="priority"><option value="normal">اعتيادي</option><option value="urgent"${meta.priority === 'urgent' ? ' selected' : ''}>عاجل</option><option value="very_urgent"${meta.priority === 'very_urgent' ? ' selected' : ''}>عاجل جداً</option></select></div>
+        <div class="field"><label for="lpn">رقم الكتاب الورقي (إن وجد)</label><input class="input" id="lpn" name="paper_no" dir="auto" maxlength="60" value="${h(meta.paper_no || '')}"></div>
+        <div class="field full"${meta.paper_no || scan ? '' : ' hidden'} id="pd-box"><label for="lpd">تاريخ الكتاب الورقي</label><input class="input" id="lpd" name="paper_date" type="date" value="${h(meta.paper_date || '')}"></div></div>
+      ${scan ? App.attachBar('صورة الكتاب أو ملفه') : ''}
+      <div class="field"><label for="lb">${scan ? 'ملاحظة (اختياري)' : 'نص الكتاب'}</label><textarea class="input" id="lb" name="body" style="min-height:${scan ? 80 : 150}px" maxlength="6000"${scan ? '' : ' autofocus'}>${h(body)}</textarea></div>
+      ${ed && ed.files.length ? `<div class="field"><label>المرفقات الحالية</label><div class="files">${ed.files.map(App.oldFile).join('')}</div></div>` : ''}
+      ${scan ? '' : App.attachBar(ed ? 'إضافة مرفقات' : undefined)}</div>
+      <div class="modal-f"><button class="btn" type="submit">${ic(ed ? 'check' : 'send')}${ed ? 'حفظ التعديل' : 'إرسال'}</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
+    const o = $('#modals').lastElementChild, tp = $('[data-toggle-pick]', o);
+    if (tp) tp.addEventListener('change', e => { $('#pick-box', o).hidden = e.target.value !== 'ids'; });
+    $('#lpn', o).addEventListener('input', e => { $('#pd-box', o).hidden = !e.target.value.trim() && !scan; });
+  },
+  oldFile: f => `<span class="file">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span><button type="button" class="rm" data-act="rmOld" data-id="${f.id}" aria-label="حذف المرفق" style="color:var(--red);display:grid">${ic('x')}</button></span>`,
+  rmOld(el) { App._rm.push(el.dataset.id); el.closest('.file').remove(); },
   sendLetter(form) {
-    const to = form.to.value, ids = $$('input[name=ids]:checked', form).map(i => i.value);
-    if (to === 'ids' && !ids.length) return toast('اختر مستلماً واحداً على الأقل', true);
-    if (form.closest('.modal').querySelector('h3').textContent.startsWith('رفع كتاب جاهز') && !App._files.length) return toast('أرفق صورة الكتاب أو ملفه أولاً', true);
+    const edit = form.dataset.edit, to = form.to ? form.to.value : '', ids = $$('input[name=ids]:checked', form).map(i => i.value);
+    if (!edit && to === 'ids' && !ids.length) return toast('اختر مستلماً واحداً على الأقل', true);
+    if (form.dataset.scan && !App._files.length) return toast('أرفق صورة الكتاب أو ملفه أولاً', true);
+    const meta = { priority: form.priority.value, paper_no: form.paper_no.value.trim(), paper_date: form.paper_no.value.trim() ? form.paper_date.value : '' };
     run($('button[type=submit]', form), async () => {
-      await api('send_letter', { to, ids, subject: form.subject.value, body: form.body.value, parent_id: form.dataset.parent, files: await uploadFiles(App._files) });
-      Modal.closeAll(); App.ui.letTab = 'out'; App.render(true); toast('أُرسل الكتاب');
+      const files = await uploadFiles(App._files);
+      if (edit) await api('edit_letter', { id: edit, subject: form.subject.value, body: form.body.value, meta, files, remove_files: App._rm });
+      else await api('send_letter', { to, ids, subject: form.subject.value, body: form.body.value, meta, parent_id: form.dataset.parent, files });
+      Modal.closeAll(); App.ui.letTab = 'out'; App.render(true); toast(edit ? 'حُفظ تعديل الكتاب' : 'أُرسل الكتاب');
     });
   },
 
@@ -622,7 +680,7 @@ const App = {
   help() {
     const r = me().role, S = (t, a) => `<div class="sub-h" style="margin-top:14px">${t}</div><ol style="margin:0;padding-inline-start:20px;line-height:2">${a.map(x => `<li>${x}</li>`).join('')}</ol>`;
     let b = '';
-    if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».']);
+    if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'ما دام الطلب «لم يُطّلع عليه بعد» يمكنك تعديله أو حذفه. بعد الاطلاع يُقفل.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».', 'من «الكتب» يمكنك إرسال كتاب أو رفع كتاب مصوّر إلى رئاسة القسم ومتابعة قرارها.']);
     if (r === 'head') b += S('البتّ بطلبات التدريسيين', ['الطلبات الواردة تظهر في «بانتظار قرارك».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى العمادة، إرجاع للتعديل، أو رفض.', 'كل طلب يُحفظ في «الأرشيف الكامل» ويمكن البحث عنه بالتاريخ أو الاسم.'])
       + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.'])
       + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'كل كتاب ترسله إلى العمادة تظهر عليه حالته: بانتظار القرار، موافَق عليه، مُعاد، أو مرفوض مع السبب.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);

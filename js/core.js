@@ -111,6 +111,7 @@ function setState(s) { if (s.settings && !s.settings.university) s.settings.univ
 
 /* ── roles & labels ── */
 const me = () => ST.me;
+const V6 = () => (ST.v || 0) >= 6;
 const isHead = () => me().role === 'head', isFac = () => me().role === 'faculty';
 const isDean = () => ['dean', 'dean_asst'].includes(me().role), isUnit = () => me().role === 'unit';
 const uname = id => U[id] ? U[id].name : '—';
@@ -134,7 +135,7 @@ const EVENT = {
   submit: ['تقديم الطلب', '--g500'], resubmit: ['إعادة التقديم بعد التعديل', '--g500'], withdraw: ['سحب الطلب', '--ink-3'],
   approve: ['موافقة وإنجاز', '--g600'], reject: ['رفض الطلب', '--red'], return: ['إرجاع الطلب', '--red'],
   forward: ['تحويل إلى العمادة', '--blue'], assign: ['تحويل إلى جهة مختصة', '--violet'], complete: ['إنجاز من الشعبة', '--g600'],
-  back: ['إرجاع إلى العمادة', '--amber'], note: ['ملاحظة', '--gold']
+  back: ['إرجاع إلى العمادة', '--amber'], note: ['هامش / ملاحظة', '--gold'], edit: ['تعديل الطلب قبل الاطلاع', '--ink-3'], recall: ['سحب التحويل من العمادة', '--amber']
 };
 
 /* ── request types ── */

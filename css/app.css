@@ -502,3 +502,9 @@ button:hover>.avatar{transform:scale(1.06)}
   .login-brand .cell{opacity:.3}
   .login-brand .c1{top:8%;inset-inline-start:72%}.login-brand .c2{top:66%;inset-inline-start:84%}.login-brand .c3{top:58%;inset-inline-start:6%}
 }
+
+/* v6 — حالة الاطلاع */
+.seen{display:flex;align-items:center;gap:10px;background:var(--amber-50);color:var(--amber);border:1px solid #EBD6A8;border-radius:12px;padding:10px 14px;font-size:13.5px;font-weight:500;margin-bottom:14px;animation:rise .35s var(--ease) both}
+.seen.ok{background:var(--g50);color:var(--g700);border-color:#BFDCD2}
+.seen svg.i{width:18px;height:18px}
+.file .rm svg{width:15px;height:15px}
