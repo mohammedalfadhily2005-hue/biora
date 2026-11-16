@@ -262,7 +262,7 @@ const fileKind = (mime, name) => {
   return 'doc';
 };
 const KIND_ICON = { image: 'image', audio: 'mic', video: 'video', pdf: 'file', zip: 'archive', doc: 'file', link: 'link' };
-const fileChip = f => `<button class="file" data-act="getFile" data-id="${f.id}">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span>${f.size && f.mime !== 'text/uri-list' ? `<i class="fsz">${sizeH(f.size)}</i>` : ''}</button>`;
+const fileChip = f => f.arch ? `<span class="file arch" title="مؤرشف خارج النظام">${ic('archive')}<span>${h(f.name)}</span><i class="fsz">مؤرشف</i></span>` : `<button class="file" data-act="getFile" data-id="${f.id}">${ic(KIND_ICON[fileKind(f.mime, f.name)])}<span>${h(f.name)}</span>${f.size && f.mime !== 'text/uri-list' ? `<i class="fsz">${sizeH(f.size)}</i>` : ''}</button>`;
 const toB64 = blob => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = () => no(new Error('تعذّرت قراءة الملف')); fr.readAsDataURL(blob); });
 async function shrinkImage(f) {
   if (!/^image\/(jpeg|png|webp|bmp)$/.test(f.type) || f.size < 250 * 1024) return f;
@@ -320,3 +320,24 @@ function downloadCSV(name, rows) {
   const l = document.createElement('a'); l.href = url; l.download = name; document.body.appendChild(l); l.click(); l.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+/* ── ZIP (بدون ضغط) لملف الأرشيف ── */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u => { let c = ~0; for (let i = 0; i < u.length; i++) c = CRC_T[(c ^ u[i]) & 255] ^ (c >>> 8); return (~c) >>> 0; };
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30)); lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(12, 0x21, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true); lh.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(lh.buffer), nm, f.data);
+    const ch = new DataView(new ArrayBuffer(46)); ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(14, 0x21, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true); ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+    central.push(new Uint8Array(ch.buffer), nm); off += 30 + nm.length + sz;
+  }
+  const cs = central.reduce((a, x) => a + x.length, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cs, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/zip' });
+}
+function saveBlob(name, blob) { const url = URL.createObjectURL(blob), l = document.createElement('a'); l.href = url; l.download = name; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+const safeName = s => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 80);

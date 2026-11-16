@@ -518,3 +518,12 @@ button:hover>.avatar{transform:scale(1.06)}
 .usage-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .usage-row>div{background:#FAF8F2;border-radius:10px;padding:9px 12px;display:flex;flex-direction:column}
 .usage-row span{font-size:12px;color:var(--ink-3)}
+
+/* v8 — الأرشفة */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px}
+.steps b{font-size:12.5px;font-weight:600;text-align:center;padding:8px 4px;border-radius:10px;background:#EDEAE0;color:var(--ink-3);transition:background .3s,color .3s}
+.steps b.on{background:var(--g700);color:#fff}
+.steps b.done{background:var(--g100);color:var(--g700)}
+.note-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:14px}
+.note-box ul{margin:6px 0 0;padding-inline-start:20px;line-height:1.9}
+.file.arch{opacity:.75;border-style:dashed;cursor:default}

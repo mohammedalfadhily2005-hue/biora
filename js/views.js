@@ -187,7 +187,90 @@ const App = {
       <div class="card pad">${meter('الملفات والمرفقات', u.files_bytes, u.files_limit, pf)}${u.db_bytes ? meter('البيانات (الطلبات والكتب)', u.db_bytes, u.db_limit, pd) : ''}
         <div class="usage-row"><div><span>هذا الشهر</span><b><span class="num">${cur.files}</span> ملف · ${sizeH(cur.bytes)}</b></div><div><span>إجمالي الملفات</span><b class="num">${u.files_count}</b></div></div>
         <p class="small muted" style="margin-top:10px">${est}.</p>${warn ? `<div class="err" style="margin:10px 0 0">${warn}</div>` : ''}
+        ${(ST.v || 0) >= 8 ? `<button class="btn ${pf >= 70 ? '' : 'ghost'} block" style="margin-top:12px" data-act="archive">${ic('archive')}أرشفة وتنظيف المساحة</button>` : ''}
         ${last.length > 1 ? `<div class="sub-h" style="margin-top:14px">الرفع الشهري</div><div class="bars">${last.map(x => `<div class="bar" style="grid-template-columns:86px 1fr 62px"><span>${MONTHS[+x.month.slice(5) - 1]}</span><span class="track"><span class="fill" style="width:${x.bytes / mx * 100}%;display:block;background:var(--gold)"></span></span><b class="small">${sizeH(x.bytes)}</b></div>`).join('')}</div>` : ''}</div>`;
+  },
+
+  /* ───── الأرشفة وتنظيف المساحة (رئاسة القسم) ───── */
+  archive() {
+    App._arch = null; Modal.closeAll();
+    Modal.open(Modal.head('أرشفة وتنظيف المساحة', 'ثلاث خطوات بسيطة') + `<div class="modal-b" id="arch-body">
+      <div class="steps"><b class="on">1 اختيار الفترة</b><b>2 تنزيل الأرشيف</b><b>3 تفريغ المساحة</b></div>
+      <div class="note-box"><b>ما الذي يحدث؟</b><ul><li>تُنزَّل الملفات المرفقة القديمة (صور، PDF، Word وغيرها) في ملف واحد تحفظينه عندك.</li><li>بعدها تُحذف هذه الملفات من النظام فتفرغ المساحة.</li><li><b>الطلبات والكتب نفسها تبقى في النظام</b> بكل تفاصيلها ومسارها. الذي يُنقل هو الملف المرفق فقط.</li></ul></div>
+      <form data-submit="archScan"><div class="field"><label for="ap">أرشفة المرفقات الأقدم من</label><select class="input" id="ap" name="period"><option value="3">3 أشهر</option><option value="6">6 أشهر</option><option value="12" selected>سنة</option><option value="0">تاريخ أحدده…</option></select></div>
+      <div class="field" id="ad-box" hidden><label for="ad">التاريخ</label><input class="input" id="ad" name="date" type="date" max="${today()}"></div>
+      <button class="btn block" type="submit">${ic('search')}عرض ما سيُؤرشف</button></form></div>`);
+    const o = $('#modals').lastElementChild; $('#ap', o).addEventListener('change', e => { $('#ad-box', o).hidden = e.target.value !== '0'; });
+  },
+  archScan(form) {
+    let before;
+    if (form.period.value === '0') { before = form.date.value; if (!before) return toast('اختاري التاريخ', true); }
+    else { const d = new Date(); d.setMonth(d.getMonth() - +form.period.value); before = isoDay(d); }
+    run($('button[type=submit]', form), async () => {
+      const j = await api('archive_list', { before }); App._arch = { before, items: j.items || [], orph: j.orphans || { count: 0, bytes: 0 } };
+      App.archStep2();
+    });
+  },
+  archStep2() {
+    const a = App._arch, n = a.items.length, bytes = a.items.reduce((s, x) => s + (x.size || 0), 0), box = $('#arch-body'); if (!box) return;
+    const none = !n && !a.orph.count;
+    box.innerHTML = `<div class="steps"><b class="done">1 اختيار الفترة</b><b class="on">2 تنزيل الأرشيف</b><b>3 تفريغ المساحة</b></div>
+      ${none ? `<div class="empty">${ic('check')}<b>لا توجد مرفقات أقدم من ${plainDate(a.before)}</b><div class="small">لا شيء يحتاج إلى أرشفة الآن.</div></div><button class="btn ghost block" data-act="archive">اختيار فترة أخرى</button>` : `
+      <div class="stats" style="grid-template-columns:1fr 1fr;margin-top:0">${App.stat('ملفات ستُؤرشف', n, '--g500')}<div class="card stat" style="--tone:var(--gold)"><span class="k"><i></i>المساحة التي ستفرغ</span><span class="v" style="font-size:24px">${sizeH(bytes + a.orph.bytes)}</span></div></div>
+      <p class="small muted" style="margin:10px 2px">المرفقات الأقدم من ${plainDate(a.before)}${a.orph.count ? `، ومعها ${a.orph.count} ملف متروك من طلبات محذوفة` : ''}.</p>
+      ${n ? `<button class="btn block" data-act="archDownload">${ic('download')}تنزيل ملف الأرشيف</button>
+      <div id="arch-prog" class="small muted" style="margin-top:10px;text-align:center"></div>
+      <div id="arch-next" hidden><div class="note-box" style="margin-top:14px"><b>قبل المتابعة</b><ul><li>افتحي مجلد «التنزيلات» وتأكدي أن ملف الأرشيف موجود ويفتح.</li><li>انسخيه إلى مكان آمن: حاسبة القسم، فلاش، أو Google Drive.</li></ul></div>
+        <label class="check"><input type="checkbox" id="arch-ok"> تأكدت أن ملف الأرشيف نزل وانحفظ عندي</label>
+        <button class="btn danger block" data-act="archPurge" disabled id="arch-go">${ic('trash')}تفريغ المساحة الآن</button></div>`
+      : `<button class="btn danger block" data-act="archPurge">${ic('trash')}حذف الملفات المتروكة وتفريغ المساحة</button>`}`}`;
+    const ok = $('#arch-ok'); if (ok) ok.addEventListener('change', () => { $('#arch-go').disabled = !ok.checked; });
+  },
+  archDownload(btn) {
+    const a = App._arch, prog = $('#arch-prog');
+    run(btn, async () => {
+      const files = [], rows = [['ت', 'اسم الملف في الأرشيف', 'الرقم', 'الموضوع', 'صاحب المعاملة', 'تاريخ الرفع', 'الحجم (ك.ب)']], missing = []; let i = 0;
+      for (const x of a.items) {
+        i++; prog.textContent = `جارٍ تجهيز الملف ${i} من ${a.items.length}…`;
+        let data = null;
+        try {
+          if (x.path) { const r = await fetch(`${STORE_URL}/public/${BUCKET}/${x.path}`); if (r.ok) data = new Uint8Array(await r.arrayBuffer()); }
+          else { const f = await api('get_file', { id: x.id }); const bin = atob(f.data); data = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) data[k] = bin.charCodeAt(k); }
+        } catch {}
+        if (!data) { missing.push(x.name); continue; }
+        const nm = `المرفقات/${String(i).padStart(3, '0')} - ${safeName(x.ref)} - ${safeName(x.name)}`;
+        files.push({ name: nm, data }); rows.push([i, nm, x.ref || '', TYPE[x.subject] ? TYPE[x.subject].label : (x.subject || ''), x.owner || '', plainDT(x.at), Math.round((x.size || 0) / 1024)]);
+      }
+      const enc = new TextEncoder(), csv = r => enc.encode('\uFEFF' + r.map(l => l.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n'));
+      const R = ST.requests.filter(r => isoDay(new Date(r.created_at)) < a.before), L = ST.letters.filter(l => isoDay(new Date(l.created_at)) < a.before);
+      const extra = [{ name: 'فهرس المرفقات.csv', data: csv(rows) },
+        { name: 'سجل الطلبات.csv', data: csv([['رقم الطلب', 'النوع', 'مقدم الطلب', 'التفاصيل', 'الحالة', 'تاريخ التقديم'], ...R.map(r => [r.ref, typeLabel(r), uname(r.user_id), summary(r), STATUS[r.status][0], plainDT(r.created_at)])]) },
+        { name: 'سجل الكتب.csv', data: csv([['العدد', 'الموضوع', 'من', 'إلى', 'التاريخ', 'نص الكتاب'], ...L.map(l => [l.ref, l.subject, upos(l.from_id), l.to_label || '', plainDT(l.created_at), l.body || ''])]) },
+        { name: 'اقرأني.txt', data: enc.encode(`أرشيف نظام BIORA — ${ST.settings.department}، ${ST.settings.college}، ${ST.settings.university}\r\nالمرفقات الأقدم من ${plainDate(a.before)}\r\nتاريخ الأرشفة: ${plainDT(new Date())}\r\n\r\nالمجلد «المرفقات» يحتوي الملفات. «فهرس المرفقات» يبيّن كل ملف يعود لأي طلب أو كتاب.\r\nملفات CSV تُفتح ببرنامج Excel.\r\n`) }];
+      // تقسيم إلى أجزاء لا يتجاوز كل منها 150 ميغابايت
+      const chunks = [[]]; let sz = 0;
+      for (const f of files) { if (sz + f.data.length > 150 * 1048576 && chunks.at(-1).length) { chunks.push([]); sz = 0; } chunks.at(-1).push(f); sz += f.data.length; }
+      chunks.forEach((c, k) => saveBlob(`BIORA-archive-before-${a.before}${chunks.length > 1 ? `-part${k + 1}` : ''}.zip`, zipStore(k === 0 ? [...extra, ...c] : c)));
+      a.got = files.length;
+      prog.innerHTML = `نزل ملف الأرشيف وفيه <b>${files.length}</b> ملف${chunks.length > 1 ? ` على ${chunks.length} أجزاء` : ''}.${missing.length ? ` تعذّر تنزيل ${missing.length} ملف وسيبقى في النظام.` : ''}`;
+      a.skip = new Set(a.items.filter(x => missing.includes(x.name)).map(x => x.id));
+      $('#arch-next').hidden = false;
+    });
+  },
+  archPurge(btn) {
+    const a = App._arch, ids = a.items.filter(x => !(a.skip && a.skip.has(x.id))).map(x => x.id), before = ST.usage ? ST.usage.files_bytes : 0;
+    run(btn, async () => {
+      const b = await api('archive_begin', { ids }), paths = b.paths || [];
+      for (let i = 0; i < paths.length; i += 80) {
+        const r = await fetch(`${STORE_URL}/${BUCKET}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...(LOCAL ? {} : { apikey: CFG.key, Authorization: 'Bearer ' + CFG.key }) }, body: JSON.stringify({ prefixes: paths.slice(i, i + 80) }) });
+        if (!r.ok) throw new Error('تعذّر حذف الملفات من المخزن. لم يُحذف شيء من السجلات، حاولي مرة أخرى');
+      }
+      const f = await api('archive_finish', { ids }), freed = Math.max(0, before - (ST.usage ? ST.usage.files_bytes : 0));
+      const box = $('#arch-body');
+      if (box) box.innerHTML = `<div class="steps"><b class="done">1 اختيار الفترة</b><b class="done">2 تنزيل الأرشيف</b><b class="done">3 تفريغ المساحة</b></div>
+        <div class="empty" style="padding:26px 10px">${ic('check')}<b>تم تفريغ المساحة</b><div class="small">أُرشف ${f.archived || 0} ملف${freed ? `، وفرغت ${sizeH(freed)}` : ''}.<br>الطلبات والكتب باقية في النظام، ويظهر بجانب مرفقاتها «مؤرشف».</div></div><button class="btn block" data-act="close">تم</button>`;
+      App.dirty = true;
+    });
   },
 
   /* ───── requests ───── */
@@ -224,7 +307,7 @@ const App = {
   },
   exportReqs() {
     const L = App.filteredReqs(); if (!L.length) return toast('لا توجد طلبات للتصدير', true);
-    downloadCSV(`طلبات-BIORA-${today()}.csv`, [['رقم الطلب', 'النوع', 'مقدم الطلب', 'اللقب العلمي', 'التفاصيل', 'الحالة', 'تاريخ التقديم', 'آخر تحديث'],
+    downloadCSV(`BIORA-requests-${today()}.csv`, [['رقم الطلب', 'النوع', 'مقدم الطلب', 'اللقب العلمي', 'التفاصيل', 'الحالة', 'تاريخ التقديم', 'آخر تحديث'],
       ...L.map(r => [r.ref, typeLabel(r), uname(r.user_id), (U[r.user_id] || {}).rank || '', summary(r), STATUS[r.status][0], plainDT(r.created_at), plainDT(r.updated_at)])]);
     toast('تم تنزيل الملف');
   },
@@ -414,7 +497,7 @@ const App = {
   },
   exportStaff() {
     const L = ST.users.filter(x => ['faculty', 'head'].includes(x.role));
-    downloadCSV(`الكادر-التدريسي-${today()}.csv`, [['ت', 'الاسم', 'اللقب العلمي', 'تاريخ الحصول على اللقب', 'اسم المستخدم', 'الهاتف', 'البريد', 'الحالة'], ...L.map((x, i) => [i + 1, x.name, x.rank, x.rank_date || '', x.username, x.phone || '', x.email || '', x.active ? 'فعّال' : 'معطَّل'])]);
+    downloadCSV(`BIORA-staff-${today()}.csv`, [['ت', 'الاسم', 'اللقب العلمي', 'تاريخ الحصول على اللقب', 'اسم المستخدم', 'الهاتف', 'البريد', 'الحالة'], ...L.map((x, i) => [i + 1, x.name, x.rank, x.rank_date || '', x.username, x.phone || '', x.email || '', x.active ? 'فعّال' : 'معطَّل'])]);
     toast('تم تنزيل الملف');
   },
   openStaff(el) {
@@ -521,7 +604,7 @@ const App = {
   saveAbsNote(form) { run($('button[type=submit]', form), async () => { await api('set_absence', { user_id: form.dataset.u, day: App.ui.absDay, kind: form.dataset.k, note: form.note.value }); Modal.closeAll(); App.render(true); toast('حُفظت الملاحظة'); }); },
   exportAbs() {
     const KL = { absent: 'غياب', late: 'تأخر', permit: 'إذن' }, rec = ST.absences.filter(a => a.day.slice(0, 7) === App.ui.absMonth);
-    downloadCSV(`الغيابات-${App.ui.absMonth}.csv`, [['التاريخ', 'الاسم', 'النوع', 'ملاحظة'], ...rec.map(a => [a.day, uname(a.user_id), KL[a.kind], a.note || ''])]); toast('تم تنزيل الملف');
+    downloadCSV(`BIORA-absences-${App.ui.absMonth}.csv`, [['التاريخ', 'الاسم', 'النوع', 'ملاحظة'], ...rec.map(a => [a.day, uname(a.user_id), KL[a.kind], a.note || ''])]); toast('تم تنزيل الملف');
   },
 
   /* ───── letters ───── */
@@ -701,7 +784,7 @@ const App = {
     let b = '';
     if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'ما دام الطلب «لم يُطّلع عليه بعد» يمكنك تعديله أو حذفه. بعد الاطلاع يُقفل.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».', 'من «الكتب» يمكنك إرسال كتاب أو رفع كتاب مصوّر إلى رئاسة القسم ومتابعة قرارها.']);
     if (r === 'head') b += S('البتّ بطلبات التدريسيين', ['الطلبات الواردة تظهر في «بانتظار قرارك».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى العمادة، إرجاع للتعديل، أو رفض.', 'كل طلب يُحفظ في «الأرشيف الكامل» ويمكن البحث عنه بالتاريخ أو الاسم.'])
-      + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.'])
+      + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.', 'بطاقة «مساحة التخزين» في لوحة التحكم تبيّن المستخدَم. إذا اقتربت من الامتلاء اضغطي «أرشفة وتنظيف المساحة» واتبعي الخطوات الثلاث.'])
       + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'كل كتاب ترسله إلى العمادة تظهر عليه حالته: بانتظار القرار، موافَق عليه، مُعاد، أو مرفوض مع السبب.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
     if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['افتح كتاب القسم الوارد واختر: موافقة، إعادة للقسم، أو رفض مع السبب.', '«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
     if (r === 'unit') b += S('الطلبات المحوَّلة', ['تظهر عندكم فقط الطلبات التي حوّلتها العمادة إلى شعبتكم.', 'افتح الطلب واضغط «تم الإنجاز»، أو «إرجاع إلى العمادة» مع السبب.']);
