@@ -61,10 +61,11 @@ const App = {
   /* ───── shell ───── */
   nav() {
     const r = me().role, pend = ST.requests.filter(needsMe).length;
-    const unread = ST.letters.filter(l => l.from_id !== me().id && l.rcpt.some(c => c.user_id === me().id && !c.read_at)).length;
+    const unread = ST.letters.filter(l => !isOfficial(l) && unreadBy(l, me().id)).length, unOff = ST.letters.filter(l => isOfficial(l) && unreadBy(l, me().id)).length;
     const items = [['home', r === 'head' ? 'لوحة التحكم' : 'الرئيسية', 'home', 0],
       ['requests', r === 'faculty' ? 'طلباتي' : r === 'head' ? 'الطلبات' : r === 'unit' ? 'المحوَّل إلينا' : 'الوارد من القسم', 'file', pend]];
     if (r === 'head') items.push(['staff', 'الكادر', 'users', 0], ['absences', 'الغيابات', 'calendar', 0]);
+    if (r !== 'unit') items.push(['board', 'الكتب الرسمية', 'building', unOff]);
     items.push(['letters', r === 'faculty' ? 'الكتب والتعاميم' : 'المراسلات', 'mail', unread]);
     return items;
   },
@@ -98,7 +99,7 @@ const App = {
       const step = t => { const k = Math.min(1, (t - t0) / d); el.textContent = Math.round(n * (1 - Math.pow(1 - k, 3))); if (k < 1 && el.isConnected) requestAnimationFrame(step); else el.textContent = n; };
       el.textContent = 0; requestAnimationFrame(step); });
   },
-  short: t => ({ 'لوحة التحكم': 'الرئيسية', 'الكتب والتعاميم': 'الكتب', 'الوارد من القسم': 'الوارد', 'المحوَّل إلينا': 'الطلبات' }[t] || t),
+  short: t => ({ 'الكتب الرسمية': 'الرسمية', 'لوحة التحكم': 'الرئيسية', 'الكتب والتعاميم': 'الكتب', 'الوارد من القسم': 'الوارد', 'المحوَّل إلينا': 'الطلبات' }[t] || t),
   badges() { /* light refresh while a modal is open */ },
 
   pwField: (id, name, label, auto, extra = '') => `<div class="field"><label for="${id}">${label}</label><div class="inp-wrap pw">${ic('lock')}<input class="input" id="${id}" name="${name}" type="password" autocomplete="${auto}" dir="ltr" required ${extra}><button type="button" class="eye" data-act="togglePw" aria-label="إظهار كلمة المرور">${ic('eye')}</button><i class="bar"></i></div></div>`,
@@ -319,7 +320,7 @@ const App = {
     let inp;
     if (f.t === 'select') inp = `<select class="input" id="${id}" name="${f.k}"${req}><option value="">اختر…</option>${f.o.map(o => `<option${v === o ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
     else if (f.t === 'staff') inp = `<select class="input" id="${id}" name="${f.k}"><option value="">— لا يوجد —</option>${ST.users.filter(x => ['faculty', 'head'].includes(x.role) && x.active && x.id !== me().id).map(x => `<option value="${x.id}"${v === x.id ? ' selected' : ''}>${h(x.name)}</option>`).join('')}</select>`;
-    else if (f.t === 'area') inp = `<textarea class="input" id="${id}" name="${f.k}"${req} maxlength="2000">${h(v || '')}</textarea>`;
+    else if (f.t === 'area') inp = `<textarea class="input" id="${id}" name="${f.k}"${req} maxlength="${f.big ? 6000 : 2000}"${f.big ? ' style="min-height:200px"' : ''}>${h(v || '')}</textarea>`;
     else inp = `<input class="input" id="${id}" name="${f.k}" type="${f.t === 'date' ? 'date' : f.t === 'dt' ? 'datetime-local' : 'text'}" value="${h(v || '')}"${req}${f.t === 'date' && (f.k === 'from' || f.k === 'to') ? ' data-days="1"' : ''} maxlength="300">`;
     return `<div class="field${f.half ? '' : ' full'}">${lab}${inp}</div>`;
   },
@@ -608,8 +609,58 @@ const App = {
   },
 
   /* ───── letters ───── */
+  /* ───── الكتب الرسمية: وزارية، جامعية، كلية، قسم ───── */
+  v_board() {
+    const m = me(), u = App.ui; u.boardCat = u.boardCat || ''; u.boardTab = u.boardTab || (isHead() ? 'pub' : 'all');
+    let all = ST.letters.filter(isOfficial);
+    const mine = all.filter(l => l.from_id === m.id), inc = all.filter(l => l.from_id !== m.id);
+    let L = isHead() ? (u.boardTab === 'pub' ? mine : inc) : all;
+    if (u.boardCat) L = L.filter(l => offCat(l) === OFF[u.boardCat]);
+    const row = l => { const un = unreadBy(l, m.id), meta = l.meta || {}, rd = l.rcpt.filter(c => c.read_at).length;
+      return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic('building')}</span><span class="mid"><b>${h(offTitle(l))}</b><span>${meta.paper_no ? `العدد <span class="num">${h(meta.paper_no)}</span>${meta.paper_date ? ' في ' + plainDate(meta.paper_date) : ''} · ` : ''}${l.from_id === m.id ? `اطّلع <span class="num">${rd}</span> من <span class="num">${l.rcpt.length}</span>` : 'من: ' + h(upos(l.from_id))}${l.files.length ? ` · ${l.files.length} مرفق` : ''}</span></span>
+        <span class="end"><span style="display:flex;gap:6px">${App.PRI[meta.priority] ? `<span class="chip red plain">${App.PRI[meta.priority]}</span>` : ''}<span class="chip ${offCat(l) === OFF.min ? 'violet' : offCat(l) === OFF.uni ? 'blue' : 'green'} plain">${h(offCat(l).replace('كتاب ', '').replace('تعميم ', ''))}</span></span><span class="date">${ago(l.created_at)}</span></span></button>`; };
+    const cats = [['', 'الكل'], ['min', 'وزارية'], ['uni', 'جامعية'], ['col', 'الكلية'], ['dep', 'القسم']];
+    const canPub = isHead() || isDean();
+    return `<div class="hero" style="margin-top:8px;padding:20px 24px">${HELIX_BG}<div class="grow"><h2 style="font-size:19px">${isFac() ? 'الكتب الرسمية والتعاميم' : isHead() ? 'نشر الكتب الوزارية والجامعية على الكادر' : 'إبلاغ قسم علوم الحياة بالكتب الرسمية'}</h2><p>${isFac() ? 'ما تنشره رئاسة القسم من كتب الوزارة والجامعة والكلية.' : isHead() ? 'ارفعي صورة الكتاب أو ملفه، ويصل إشعار لكل التدريسيين.' : 'يصل الكتاب إلى رئاسة القسم، وهي تنشره على الكادر.'}</p></div>
+      ${canPub ? `<button class="btn gold" data-act="publish">${ic('plus')}${isHead() ? 'نشر كتاب رسمي' : 'إبلاغ القسم بكتاب'}</button>` : ''}</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0 12px">
+        ${isHead() ? `<div class="seg"><button class="${u.boardTab === 'pub' ? 'on' : ''}" data-act="setTab" data-key="boardTab" data-val="pub">المنشور للكادر<span class="n num">${mine.length}</span></button><button class="${u.boardTab === 'in' ? 'on' : ''}" data-act="setTab" data-key="boardTab" data-val="in">وارد من العمادة<span class="n num">${inc.filter(l => unreadBy(l, m.id)).length || inc.length}</span></button></div>` : ''}
+        <div class="seg">${cats.map(([k, t]) => `<button class="${u.boardCat === k ? 'on' : ''}" data-act="setTab" data-key="boardCat" data-val="${k}">${t}</button>`).join('')}</div></div>
+      <div class="card list">${L.map(row).join('') || App.empty(isFac() ? 'لا توجد كتب منشورة بعد' : isHead() && u.boardTab === 'in' ? 'لم تبلّغ العمادة بكتب بعد' : 'لم يُنشر شيء بعد', canPub ? 'اضغط الزر الذهبي في الأعلى للبدء.' : 'ستظهر هنا فور نشرها ويصلك إشعار.', 'building')}</div>`;
+  },
+  publish() {
+    App._files = []; App._rm = []; Modal.closeAll();
+    Modal.open(Modal.head(isHead() ? 'نشر كتاب رسمي على الكادر' : 'إبلاغ رئاسة القسم بكتاب رسمي', isHead() ? 'يصل إلى كل التدريسيين مع إشعار' : 'يصل إلى رئاسة قسم علوم الحياة') + `<form data-submit="doPublish" style="display:contents"><div class="modal-b"><div class="grid2">
+      <div class="field"><label for="pc">الجهة المصدرة <span class="req">*</span></label><select class="input" id="pc" name="cat">${Object.entries(OFF).filter(([k]) => isHead() || k !== 'dep').map(([k, v]) => `<option value="${k}"${(isHead() ? 'min' : 'col') === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+      <div class="field"><label for="ppr">درجة الاستعجال</label><select class="input" id="ppr" name="priority"><option value="normal">اعتيادي</option><option value="urgent">عاجل</option><option value="very_urgent">عاجل جداً</option></select></div>
+      <div class="field full"><label for="ps">موضوع الكتاب <span class="req">*</span></label><input class="input" id="ps" name="subject" required maxlength="170" autofocus></div>
+      <div class="field"><label for="pn">رقم الكتاب</label><input class="input" id="pn" name="paper_no" dir="auto" maxlength="60"></div>
+      <div class="field"><label for="pd">تاريخ الكتاب</label><input class="input" id="pd" name="paper_date" type="date" max="${today()}"></div>
+      ${App.attachBar('صورة الكتاب أو ملفه')}
+      <div class="field full"><label for="pb">توجيه أو ملاحظة (اختياري)</label><textarea class="input" id="pb" name="body" maxlength="3000" placeholder="مثال: للاطلاع والعمل بموجبه"></textarea></div></div></div>
+      <div class="modal-f"><button class="btn" type="submit">${ic('send')}${isHead() ? 'نشر على الكادر' : 'إبلاغ رئاسة القسم'}</button><button class="btn ghost" type="button" data-act="close">إلغاء</button></div></form>`);
+  },
+  doPublish(form) {
+    if (!App._files.length && !form.body.value.trim()) return toast('أرفق صورة الكتاب أو ملفه، أو اكتب نصه', true);
+    const meta = { priority: form.priority.value, paper_no: form.paper_no.value.trim(), paper_date: form.paper_no.value.trim() ? form.paper_date.value : '' };
+    run($('button[type=submit]', form), async () => {
+      await api('send_letter', { to: isHead() ? 'staff' : 'head', subject: `${OFF[form.cat.value]}: ${form.subject.value.trim()}`, body: form.body.value, meta, files: await uploadFiles(App._files) });
+      Modal.closeAll(); App.ui.boardTab = isHead() ? 'pub' : 'all'; App.ui.boardCat = ''; App.render(true); toast(isHead() ? 'نُشر الكتاب ووصل إشعار للكادر' : 'أُبلغت رئاسة القسم بالكتاب');
+    });
+  },
+  republish(el) {
+    const l = ST.letters.find(x => x.id === el.dataset.id);
+    App.confirm('نشر الكتاب على الكادر', `سيُنشر «${h(offTitle(l))}» مع مرفقاته على كل التدريسيين ويصلهم إشعار.`, 'نشر على الكادر', async () => {
+      const files = [];
+      for (const f of l.files) { if (f.arch) continue; const g = await api('get_file', { id: f.id }), d = g.data || '';
+        files.push(d.startsWith('url:') ? { name: f.name, mime: f.mime, size: f.size, path: d.slice(4), data: d } : d.startsWith('link:') ? { name: f.name, mime: 'text/uri-list', link: d.slice(5), data: d } : { name: f.name, mime: f.mime, data: d }); }
+      await api('send_letter', { to: 'staff', subject: l.subject, body: l.body, meta: l.meta || {}, parent_id: l.id, files });
+      Modal.closeAll(); App.ui.boardTab = 'pub'; App.render(true); toast('نُشر الكتاب على الكادر');
+    });
+  },
+
   v_letters() {
-    const m = me(), u = App.ui, inbox = ST.letters.filter(l => l.from_id !== m.id), out = ST.letters.filter(l => l.from_id === m.id);
+    const m = me(), u = App.ui, inbox = ST.letters.filter(l => l.from_id !== m.id && !isOfficial(l)), out = ST.letters.filter(l => l.from_id === m.id && !isOfficial(l));
     const L = u.letTab === 'in' ? inbox : out, unread = inbox.filter(l => l.rcpt.some(c => c.user_id === m.id && !c.read_at)).length;
     const row = l => { const un = l.from_id !== m.id && l.rcpt.some(c => c.user_id === m.id && !c.read_at), pr = (l.meta || {}).priority;
       return `<button class="row${un ? ' unread' : ''}" data-act="openLetter" data-id="${l.id}"><span class="ti">${ic(l.kind === 'circular' ? 'users' : 'mail')}</span><span class="mid"><b>${h(l.subject)}</b><span>${u.letTab === 'in' ? 'من: ' + h(upos(l.from_id)) : 'إلى: ' + h(l.to_label || '')}${V6() && u.letTab === 'out' && l.rcpt.length && l.rcpt.every(c => !c.read_at) ? ' · لم يُطّلع عليه بعد' : ''}</span></span>
@@ -677,7 +728,7 @@ const App = {
       <div class="modal-f">${canDec ? `<button class="btn" data-act="decide" data-d="accept" data-id="${l.id}">${ic('check')}موافقة</button><button class="btn ghost" data-act="decide" data-d="return" data-id="${l.id}">${ic('undo')}إعادة للاستكمال</button><button class="btn danger" data-act="decide" data-d="reject" data-id="${l.id}">${ic('x')}رفض</button>` : ''}
         ${canEd ? `<button class="btn" data-act="compose" data-edit="${l.id}">${ic('edit')}تعديل</button><button class="btn danger" data-act="delLetter" data-id="${l.id}">${ic('trash')}حذف</button>` : ''}
         ${!mineL && (!isFac() || (U[l.from_id] && U[l.from_id].role === 'head' && l.kind !== 'circular')) ? `<button class="btn ${canDec ? 'ghost' : ''}" data-act="compose" data-reply="${l.id}">${ic('undo')}رد</button>` : ''}
-        ${isHead() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="staff">${ic('users')}تعميم على الكادر</button>` : ''}
+        ${isHead() && !mineL && isOfficial(l) ? `<button class="btn" data-act="republish" data-id="${l.id}">${ic('users')}نشر على الكادر</button>` : isHead() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="staff">${ic('users')}تعميم على الكادر</button>` : ''}
         ${isHead() && !mineL && U[l.from_id] && U[l.from_id].role === 'faculty' ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="deanery">${ic('share')}رفع إلى العمادة</button>` : ''}
         ${isDean() && !mineL ? `<button class="btn soft" data-act="compose" data-fwd="${l.id}" data-to="units">${ic('share')}إحالة إلى الشعب</button>` : ''}
         <span class="sp"></span><button class="btn ghost" data-act="printLetter" data-id="${l.id}">${ic('printer')}طباعة</button></div>`);
@@ -748,7 +799,7 @@ const App = {
   },
   goNotif(el) {
     Modal.closeAll(); const { kind, ref } = el.dataset;
-    if (kind === 'letter' && ST.letters.some(l => l.id === ref)) { location.hash = '#letters'; setTimeout(() => App.openLetter({ dataset: { id: ref } }), 60); }
+    if (kind === 'letter' && ST.letters.some(l => l.id === ref)) { location.hash = isOfficial(ST.letters.find(l => l.id === ref)) ? '#board' : '#letters'; setTimeout(() => App.openLetter({ dataset: { id: ref } }), 60); }
     else if (ST.requests.some(r => r.id === ref)) App.openReq({ dataset: { id: ref } });
     else App.render(true);
   },
@@ -782,11 +833,11 @@ const App = {
   help() {
     const r = me().role, S = (t, a) => `<div class="sub-h" style="margin-top:14px">${t}</div><ol style="margin:0;padding-inline-start:20px;line-height:2">${a.map(x => `<li>${x}</li>`).join('')}</ol>`;
     let b = '';
-    if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'ما دام الطلب «لم يُطّلع عليه بعد» يمكنك تعديله أو حذفه. بعد الاطلاع يُقفل.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».', 'من «الكتب» يمكنك إرسال كتاب أو رفع كتاب مصوّر إلى رئاسة القسم ومتابعة قرارها.']);
+    if (r === 'faculty' || r === 'head') b += S('تقديم طلب', ['اضغط «طلب جديد» واختر نوع الطلب.', 'املأ الحقول (المعلَّمة بنجمة مطلوبة) وأرفق ملفاً إن احتجت.', 'اضغط «تقديم الطلب»، وسيصلك إشعار عند كل تغيّر في حالته.', 'ما دام الطلب «لم يُطّلع عليه بعد» يمكنك تعديله أو حذفه. بعد الاطلاع يُقفل.', 'إذا أُعيد الطلب إليك: افتحه، اقرأ السبب، ثم «تعديل وإعادة تقديم».', 'من «الكتب» يمكنك إرسال كتاب أو رفع كتاب مصوّر إلى رئاسة القسم ومتابعة قرارها.', '«طلب حر» لأي طلب لا يوجد له نموذج: اكتب الموضوع والنص بصيغتك.', '«الكتب الرسمية» فيها كتب الوزارة والجامعة والكلية التي تنشرها رئاسة القسم.']);
     if (r === 'head') b += S('البتّ بطلبات التدريسيين', ['الطلبات الواردة تظهر في «بانتظار قرارك».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى العمادة، إرجاع للتعديل، أو رفض.', 'كل طلب يُحفظ في «الأرشيف الكامل» ويمكن البحث عنه بالتاريخ أو الاسم.'])
       + S('الكادر والغيابات', ['من «الكادر» افتح ملف أي تدريسي لرؤية بياناته وإجازاته وغياباته.', 'من «الغيابات» اختر اليوم وحدّد الغائب أو المتأخر؛ الباقون حاضرون تلقائياً.', '«كلمة مرور جديدة» في ملف التدريسي تعطيه كلمة مؤقتة إن نسي كلمته.', 'بطاقة «مساحة التخزين» في لوحة التحكم تبيّن المستخدَم. إذا اقتربت من الامتلاء اضغطي «أرشفة وتنظيف المساحة» واتبعي الخطوات الثلاث.'])
-      + S('المراسلات', ['«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'كل كتاب ترسله إلى العمادة تظهر عليه حالته: بانتظار القرار، موافَق عليه، مُعاد، أو مرفوض مع السبب.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
-    if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['افتح كتاب القسم الوارد واختر: موافقة، إعادة للقسم، أو رفض مع السبب.', '«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
+      + S('المراسلات', ['من «الكتب الرسمية» اضغطي «نشر كتاب رسمي» لرفع كتاب وزاري أو جامعي ونشره على كل التدريسيين.', 'ما تبلّغك به العمادة يظهر في «وارد من العمادة»، وتنشرينه على الكادر بضغطة.', '«كتاب جديد» لإرسال كتاب إلى العمادة أو تعميم على الكادر.', 'كل كتاب ترسله إلى العمادة تظهر عليه حالته: بانتظار القرار، موافَق عليه، مُعاد، أو مرفوض مع السبب.', 'افتح أي كتاب وارد من العمادة واضغط «تعميم على الكادر» لإحالته.']);
+    if (r === 'dean' || r === 'dean_asst') b += S('طلبات القسم', ['الطلبات المحوَّلة من رئاسة القسم تظهر في «بانتظار الإجراء».', 'افتح الطلب واختر: موافقة وإنجاز، تحويل إلى شعبة، إرجاع إلى القسم، أو رفض.']) + S('المراسلات', ['افتح كتاب القسم الوارد واختر: موافقة، إعادة للقسم، أو رفض مع السبب.', 'من «الكتب الرسمية» اضغط «إبلاغ القسم بكتاب» لإرسال كتاب وزاري أو جامعي إلى رئاسة القسم.', '«كتاب جديد» لمخاطبة رئاسة القسم أو الشعب.', 'افتح كتاباً وارداً واضغط «إحالة إلى الشعب» لتوجيهه.']);
     if (r === 'unit') b += S('الطلبات المحوَّلة', ['تظهر عندكم فقط الطلبات التي حوّلتها العمادة إلى شعبتكم.', 'افتح الطلب واضغط «تم الإنجاز»، أو «إرجاع إلى العمادة» مع السبب.']);
     b += S('عام', ['الجرس في الأعلى يعرض الإشعارات.', 'زر «طباعة» داخل أي طلب يخرجه بترويسة رسمية.', 'من «حسابي» يمكنك تغيير كلمة المرور وتنصيب التطبيق كأيقونة.']);
     Modal.open(Modal.head('دليل الاستخدام', h(ROLE_LABEL[r])) + `<div class="modal-b">${b}</div><div class="modal-f"><button class="btn" data-act="close">فهمت</button></div>`);

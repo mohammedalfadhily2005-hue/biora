@@ -527,3 +527,11 @@ button:hover>.avatar{transform:scale(1.06)}
 .note-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:14px}
 .note-box ul{margin:6px 0 0;padding-inline-start:20px;line-height:1.9}
 .file.arch{opacity:.75;border-style:dashed;cursor:default}
+
+/* v9 — منع التمدد الأفقي على الموبايل */
+.cols>*{min-width:0}
+.row .end{min-width:0;max-width:60%}
+.row .end .date{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.row .end .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.main{overflow-x:clip}
+@media (max-width:900px){.tabbar a span{font-size:10.5px}.row .end{max-width:46%}}

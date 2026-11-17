@@ -121,6 +121,14 @@ const ROLE_LABEL = { head: 'رئاسة القسم', faculty: 'تدريسي', dea
 const RANKS = ['استاذ', 'استاذ مساعد', 'مدرس', 'مدرس مساعد'];
 const RANK_LABEL = { 'استاذ': 'أستاذ', 'استاذ مساعد': 'أستاذ مساعد', 'مدرس': 'مدرس', 'مدرس مساعد': 'مدرس مساعد' };
 
+/* الكتب الرسمية (وزارية، جامعية…) تُنشر كتعميم يبدأ موضوعه بالجهة المصدرة */
+const OFF = { min: 'كتاب وزاري', uni: 'كتاب جامعي', col: 'كتاب الكلية', dep: 'تعميم القسم' };
+const OFF_RX = /^(كتاب وزاري|كتاب جامعي|كتاب الكلية|تعميم القسم): /;
+const isOfficial = l => OFF_RX.test(l.subject);
+const offCat = l => (l.subject.match(OFF_RX) || [])[1] || '';
+const offTitle = l => l.subject.replace(OFF_RX, '');
+const unreadBy = (l, id) => l.from_id !== id && l.rcpt.some(c => c.user_id === id && !c.read_at);
+
 const STATUS = {
   submitted: ['بانتظار رئاسة القسم', 'amber'], returned: ['مُعاد للتعديل', 'red'], at_dean: ['لدى العمادة', 'blue'],
   at_unit: ['لدى الجهة المختصة', 'violet'], returned_dept: ['مُعاد من العمادة', 'red'], done: ['منجز', 'green'],
@@ -180,8 +188,8 @@ const TYPES = [
   { k: 'nolectures', label: 'تأييد عدم وجود محاضرات', icon: 'calx', desc: 'خلال فترة معينة', f: [
     { k: 'from', l: 'من تاريخ', t: 'date', req: 1, half: 1 }, { k: 'to', l: 'إلى تاريخ', t: 'date', req: 1, half: 1 },
     { k: 'purpose', l: 'الغرض من التأييد', t: 'area', req: 1 }] },
-  { k: 'other', label: 'طلب آخر', icon: 'dots', desc: 'شؤون إدارية ووظيفية أخرى', f: [
-    { k: 'subject', l: 'موضوع الطلب', t: 'text', req: 1 }, { k: 'details', l: 'تفاصيل الطلب', t: 'area', req: 1 }] }
+  { k: 'other', label: 'طلب حر', icon: 'edit', desc: 'أي طلب آخر تكتبه بصيغتك', f: [
+    { k: 'subject', l: 'موضوع الطلب', t: 'text', req: 1 }, { k: 'details', l: 'نص الطلب (اكتب ما تريد بحرية)', t: 'area', req: 1, big: 1 }] }
 ];
 const TYPE = Object.fromEntries(TYPES.map(t => [t.k, t]));
 const typeLabel = r => { const t = TYPE[r.type]; if (!t) return r.type; return r.type === 'leave' && r.data.kind ? `إجازة ${r.data.kind}` : (r.type === 'other' && r.data.subject) ? r.data.subject : t.label; };

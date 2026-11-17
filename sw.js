@@ -1,6 +1,6 @@
 // BIORA service worker — الشبكة أولاً، والنسخة المخزنة عند انقطاع الاتصال
-const CACHE = 'biora-v8';
-const SHELL = ['./', 'index.html', 'css/app.css?v=8', 'config.js?v=8', 'js/core.js?v=8', 'js/views.js?v=8', 'icons/icon-192.png',
+const CACHE = 'biora-v9';
+const SHELL = ['./', 'index.html', 'css/app.css?v=9', 'config.js?v=9', 'js/core.js?v=9', 'js/views.js?v=9', 'icons/icon-192.png',
   'fonts/plex-arabic-400.woff2', 'fonts/plex-arabic-500.woff2', 'fonts/plex-arabic-600.woff2', 'fonts/plex-arabic-700.woff2'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
